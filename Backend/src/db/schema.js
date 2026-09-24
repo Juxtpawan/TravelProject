@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+
 
 /**
  * users — one row per PERSON, regardless of how they log in.
@@ -70,3 +71,60 @@ export const sessions = sqliteTable(
     userIdIdx: index('sessions_user_id_idx').on(table.userId),
   })
 );
+
+// ─── Travel Data Tables ───────────────────────────────────────────────────────
+
+/**
+ * destinations — top-level travel destinations (e.g., Manali, Goa)
+ * Populated from Wikivoyage via the Wikimedia Enterprise API.
+ */
+export const destinations = sqliteTable('destinations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  country: text('country'),
+  state: text('state'),
+  latitude: real('latitude'),
+  longitude: real('longitude'),
+  description: text('description'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * places — individual POIs within a destination (cafes, temples, hotels, etc.)
+ * Deduplicated across multiple source APIs.
+ */
+export const places = sqliteTable('places', {
+  id: text('id').primaryKey(),
+  destinationId: text('destination_id')
+    .notNull()
+    .references(() => destinations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  category: text('category').notNull(), // 'attraction' | 'cafe' | 'hotel'
+  latitude: real('latitude'),
+  longitude: real('longitude'),
+  googlePlaceId: text('google_place_id').unique(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => ({
+  destinationIdx: index('places_destination_idx').on(table.destinationId),
+}));
+
+/**
+ * place_sources — provenance engine.
+ * Lets the UI show "Found in 3 sources (Google, Wikivoyage, Tourism Board)".
+ */
+export const placeSources = sqliteTable('place_sources', {
+  id: text('id').primaryKey(),
+  placeId: text('place_id')
+    .notNull()
+    .references(() => places.id, { onDelete: 'cascade' }),
+  sourceName: text('source_name').notNull(), // 'Wikivoyage' | 'Google Places'
+  sourceUrl: text('source_url'),
+  license: text('license'), // 'CC BY-SA 4.0'
+  rawDataJson: text('raw_data_json'),
+  lastCheckedAt: text('last_checked_at').notNull(),
+}, (table) => ({
+  placeSourceIdx: index('place_sources_place_idx').on(table.placeId),
+}));
