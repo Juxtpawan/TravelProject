@@ -1,2 +1,7 @@
 .vscode
 frontend-folder-structure.md
+
+# Local Wikimedia snapshot artifacts.
+snapshots/
+*.tar.gz
+*.ndjson
