@@ -1,0 +1,17 @@
+name = "travelproject-api"
+main = "src/index.js"
+compatibility_date = "2026-09-14"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "travelproject-db"
+database_id = "a4854d82-1676-4b5e-998c-7d0d789e27f3" # Put your real D1 ID here
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "cloudflare-r2-bucket" # Put your real bucket name here
+
+[vars]
+FRONTEND_URL = "http://localhost:5173"
+CLIENT_ORIGIN = "http://localhost:5173"
+GOOGLE_CLIENT_ID = "175150986126-sunu8ppbbaicb4u41gc9hs89bk2cgfq0.apps.googleusercontent.com"

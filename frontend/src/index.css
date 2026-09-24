@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+/* ── 1. LOAD GLOBAL VARIABLE FONT ─────────────────────── */
+@font-face {
+  font-family: 'Trip Sans VF';
+  src: url('./assets/fonts/TripSans-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-trip-sans: "Trip Sans VF", "Trip Sans", arial, sans-serif;
+  --font-trip-serif: "Georgia", "Times New Roman", "Century Schoolbook L", serif;
+
+  /* ── Brand tokens (Simplified & Intuitive) ───────────────────────── */
+  --color-green: #00eb5b;      /* Bright neon green (Logo) */
+  --color-green-medium: #00d050;     /* Vivid accent green (Brand identity) */
+  --color-pine: #003924;       /* Deep pine green (Primary text contrast) */
+  --color-black: #000000;            /* Pure Black */
+  --color-sand: #FAF1ED;             /* Warm tinted off-white (Hero backgrounds) */
+  --color-gray: #F2F2F2;       /* Light utility gray (Borders and dividers) */
+  --color-off-white: #F8F9FA;          /* Clean off-white app background */
+  --color-gold: #F5A623;             /* Warm rating amber yellow (Stars) */
+  --color-green-deep: #002b11;       /* Rich deep forest shadow green */
+  --color-red: #DF1B12;              /* Clean error and destructive red */
+
+  /* ── Semantic mapping tokens ─────────────────────────── */
+  --color-bg-page: var(--color-off-white);
+  --color-bg-surface: #FFFFFF;
+  --color-bg-subtle: var(--color-sand);
+
+  --color-text-primary: var(--color-pine);
+  --color-text-secondary: #4B5A54;
+  --color-text-inverse: #FFFFFF;
+  --color-text-link: var(--color-green-medium);
+
+  --color-border-default: var(--color-gray);
+  --color-border-strong: #D8DCDA;
+
+  --color-btn-primary-bg: var(--color-pine);
+  --color-btn-primary-bg-hover: var(--color-green-medium);
+  --color-btn-primary-text: #FFFFFF;
+
+  --color-btn-secondary-bg: transparent;
+  --color-btn-secondary-border: var(--color-pine);
+  --color-btn-secondary-text: var(--color-pine);
+  --color-btn-secondary-bg-hover: var(--color-gray);
+
+  --color-badge-bg: color-mix(in srgb, var(--color-green) 18%, white);
+  --color-badge-text: var(--color-pine);
+  --color-rating-star: var(--color-gold);
+}
+
+@theme {
+  /* ── System Font Overrides ───────────────────────────── */
+  --font-sans: var(--font-trip-sans);
+  --font-serif: var(--font-trip-serif);
+
+  /* ── Simplified Color Palette Registries ───────────────── */
+  --color-green: var(--color-green);
+  --color-green-medium: var(--color-green-medium);
+  --color-pine: var(--color-pine);
+  --color-black: var(--color-black);
+  --color-sand: var(--color-sand);
+  --color-gray: var(--color-gray);
+  --color-off-white: var(--color-off-white);
+  --color-gold: var(--color-gold);
+  --color-green-deep: var(--color-green-deep);
+  --color-red: var(--color-red);
+
+  /* Semantic utilities */
+  --color-bg-page: var(--color-bg-page);
+  --color-bg-surface: var(--color-bg-surface);
+  --color-bg-subtle: var(--color-bg-subtle);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-text-link: var(--color-text-link);
+
+  --color-border-default: var(--color-border-default);
+  --color-border-strong: var(--color-border-strong);
+
+  --color-btn-primary-bg: var(--color-btn-primary-bg);
+  --color-btn-primary-bg-hover: var(--color-btn-primary-bg-hover);
+  --color-btn-primary-text: var(--color-btn-primary-text);
+
+  --color-btn-secondary-bg: var(--color-btn-secondary-bg);
+  --color-btn-secondary-border: var(--color-btn-secondary-border);
+  --color-btn-secondary-text: var(--color-btn-secondary-text);
+  --color-btn-secondary-bg-hover: var(--color-btn-secondary-bg-hover);
+
+  --color-badge-bg: var(--color-badge-bg);
+  --color-badge-text: var(--color-badge-text);
+  --color-rating-star: var(--color-rating-star);
+
+  /* ── Custom Typography Extensions ─────────────────────── */
+  /* Format: font-size { line-height } */
+  --text-display-10-large: 44px { line-height: 48px };
+  --text-display-10-small: 28px { line-height: 31px };
+  --text-display-30-large: 62px { line-height: 68px };
+  --text-display-30-small: 38px { line-height: 42px };
+  
+  --text-title-40-large: 28px { line-height: 34px };
+  --text-title-40-small: 24px { line-height: 29px };
+
+  --text-body-35-editorial-desktop: 18px { line-height: 22px };
+  --text-body-40-brand-desktop: 20px { line-height: 24px };
+  --text-body-40-brand-mobile: 18px { line-height: 22px };
+  --text-body-40-editorial-desktop: 20px { line-height: 24px };
+  --text-body-40-editorial-mobile: 16px { line-height: 21px };
+
+  --text-display-05-subtle-desktop: 32px { line-height: 38px };
+  --text-display-10-strong-desktop: 40px { line-height: 40px };
+  --text-display-15-subtle-desktop: 48px { line-height: 58px };
+  --text-display-15-weak-desktop: 48px { line-height: 58px };
+  --text-display-15-weak-mobile: 32px { line-height: 38px };
+  --text-display-20-strong-desktop: 54px { line-height: 65px };
+  --text-display-20-strong-mobile: 32px { line-height: 38px };
+  
+  --text-body-10: 12px { line-height: 16px };
+  --text-body-20: 14px { line-height: 18px };
+  --text-body-30: 16px { line-height: 24px };
+
+  --font-weight-black: 900;
+  --font-weight-extrabold: 800;
+  --font-weight-bold: 700;
+  --font-weight-normal: 400;
+}
+
+/* ── 3. REINFORCE GLOBAL DEFAULT RENDERING ─────────────── */
+html, body {
+  font-family: var(--font-trip-sans);
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 4. CUSTOM UTILITIES LAYER ────────────────────────── */
+@utility app-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+
+  @media (min-width: 640px) {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
