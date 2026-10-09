@@ -7,14 +7,11 @@ export const signupSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  // Can be an email address or travel username
+  email: z.string().min(1, 'Email or username is required').max(100),
+  password: z.string().min(1, 'Password is required'),
 });
 
 export const googleAuthSchema = z.object({
   idToken: z.string().min(1),
 });
-
-// export const appleAuthSchema = z.object({
-//   identityToken: z.string().min(1),
-// });

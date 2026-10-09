@@ -1,86 +1,104 @@
-// src/pages/HomePage.jsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowRight, MapPin, Sparkles } from 'lucide-react';
+import { getDestinations } from '../features/places';
+import DestinationSearch from '../features/places/components/DestinationSearch';
+
+const heroImage = 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=2000&q=85';
 
 export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [destinations, setDestinations] = useState([]);
   const navigate = useNavigate();
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    
-    // Redirects user to the explore page with their search term
-    navigate(`/explore?search=${encodeURIComponent(searchQuery)}`);
-  };
+  useEffect(() => {
+    getDestinations()
+      .then(setDestinations)
+      .catch(() => setDestinations([]));
+  }, []);
 
-  // Quick mock data for popular destinations
-  const popularPlaces = [
-    { name: 'Paris', image: 'https://unsplash.com/paris', trips: '3.2k planned' },
-    { name: 'Tokyo', image: 'https://unsplash.com', trips: '2.8k planned' },
-    { name: 'New York', image: 'https://unsplash.com', trips: '4.1k planned' },
-  ];
+  const openDestination = (destination) => navigate(`/locations/${encodeURIComponent(destination.slug)}`);
 
   return (
-    <div className="w-full bg-off-white">
-      {/* 1. Hero Section with Search Input */}
-      <section className="relative h-[200px] flex items-center justify-center bg-off-white overflow-hidden">
-        {/* Background Image Overlay */}
-        <div className="absolute inset-0 opacity-40 bg-[url('https://unsplash.com')] bg-cover bg-center" />
-        
-        <div className="relative z-10 max-w-2xl text-center px-4">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-pine mb-4 tracking-tight">
-            Where to go?
-          </h1>
-
-          {/* Search Form Wrapper */}
-          <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-2 bg-white border-2 border-border-default p-2 rounded-xl shadow-xl">
-            <input
-              type="text"
-              placeholder="Place to go, things to do, hotel"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="grow px-4 py-3 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none text-base"
-            />
-            <button
-              type="submit"
-              className="bg-green border-border-default hover:bg-moss text-pine font-semibold px-6 py-3 rounded-lg transition-colors shadow-md"
-            >
-              Start Planning
-            </button>
-          </form>
-        </div>
-      </section>
-
-      {/* 2. Popular Destinations Grid Section */}
-      <section className="max-w-6xl mx-auto px-4 py-16">
-        <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-pine">Popular destinations</h2>
-          <p className="text-slate-500 mt-1">Inspiring places to build your next itinerary</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {popularPlaces.map((place) => (
-            <div 
-              key={place.name} 
-              className="group cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md border border-slate-100 transition-all bg-white"
-              onClick={() => navigate(`/explore?search=${place.name}`)}
-            >
-              <div className="h-48 w-full overflow-hidden relative">
-                <img 
-                  src={place.image} 
-                  alt={place.name} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-              <div className="p-4">
-                <h3 className="font-bold text-lg text-pine">{place.name}</h3>
-                <p className="text-sm text-slate-500 mt-0.5">{place.trips}</p>
-              </div>
+    <div className="pb-16">
+      <section className="relative isolate mx-auto min-h-90 max-w-360 overflow-visible sm:rounded-b-lg">
+        <img
+          src={heroImage}
+          alt="Colorful coastal villages overlooking the Mediterranean"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-linear-to-r from-[#10261f]/85 via-[#10261f]/55 to-[#10261f]/10" />
+        <div className="app-container relative flex min-h-90 items-center py-12">
+          <div className="max-w-2xl text-white">
+            <p className="mb-4 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-[#d5efad]">
+              <Sparkles size={16} /> Make room for somewhere new
+            </p>
+            <h1 className="max-w-xl text-4xl font-extrabold leading-[1.08] sm:text-5xl">
+              Find your next favorite place.
+            </h1>
+            <p className="mt-4 max-w-lg text-base leading-7 text-white/90 sm:text-lg">
+              Explore places travelers love, then turn the good ideas into a trip that is yours.
+            </p>
+            <div className="mt-7 max-w-xl rounded-lg bg-white p-2 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
+              <DestinationSearch onSearch={openDestination} />
             </div>
-          ))}
+            <button
+              type="button"
+              onClick={() => navigate('/explore')}
+              className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-white underline decoration-white/60 underline-offset-4 hover:decoration-white"
+            >
+              Browse all destinations <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
       </section>
+
+      <div className="app-container">
+        <section className="py-12 sm:py-16">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-pine">A good place to begin</p>
+              <h2 className="mt-1 text-2xl font-extrabold text-pine sm:text-3xl">Explore places worth the trip</h2>
+            </div>
+            <button onClick={() => navigate('/explore')} className="hidden items-center gap-1 text-sm font-bold text-pine hover:underline sm:inline-flex">
+              See all <ArrowRight size={16} />
+            </button>
+          </div>
+
+          {destinations.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {destinations.slice(0, 6).map((destination) => (
+                <button
+                  key={destination.id}
+                  type="button"
+                  onClick={() => openDestination(destination)}
+                  className="group flex min-h-24 items-center justify-between gap-4 rounded-lg border border-[#e4eae5] bg-white p-4 text-left transition hover:border-[#87c4a0] hover:bg-[#f7fbf8]"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-bold text-pine">{destination.name}</span>
+                      <span className="mt-1 block text-sm text-[#68766e]">
+                        {destination.places_count || 0} places{destination.state ? ` · ${destination.state}` : ''}
+                      </span>
+                    </span>
+                  </span>
+                  <ArrowRight size={17} className="shrink-0 text-[#8b9990] transition group-hover:translate-x-1 group-hover:text-pine" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-start gap-4 rounded-lg border border-dashed border-[#cfd9d1] bg-[#f7faf7] p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-bold text-pine">Your destination guide is getting ready</h3>
+                <p className="mt-1 text-sm text-[#68766e]">Search the places already in the guide or open Explore to see what is available.</p>
+              </div>
+              <button onClick={() => navigate('/explore')} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-btn-primary-bg px-5 py-2.5 text-sm font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover">
+                Explore now <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

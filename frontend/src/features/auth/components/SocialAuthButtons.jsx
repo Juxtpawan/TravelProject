@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { useGoogleAuth } from '../api/useGoogleAuth';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * The two social buttons shown under both LoginForm and SignupForm.
@@ -9,38 +10,40 @@ import { useNavigate } from 'react-router-dom';
  * other file needing to change.
  */
 function SocialAuthButtons() {
-  const { submit } = useGoogleAuth();
-  const navigate = useNavigate(); // 2. INITIALIZE NAVIGATE
+  const { submit, isLoading } = useGoogleAuth();
+  const [googleError, setGoogleError] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // 3. FIX: Handle the login process asynchronously and force navigation on success
   const handleGoogleSuccess = async (credentialResponse) => {
+    if (!credentialResponse?.credential) {
+      setGoogleError('Google did not return an ID token. Please try again.');
+      return;
+    }
+
+    setGoogleError('');
     try {
-      // Wait for your hook to drop the session cookie and authenticate with Cloudflare
       await submit(credentialResponse.credential);
-      
-      console.log("Google authentication complete. Redirecting...");
-      
-      // Force navigation to the home page layout
-      navigate('/', { replace: true });
-    } catch (err) {
-      console.error("Authentication backend hook error intercepted:", err);
-      // Fallback redirect safeguard
-      navigate('/', { replace: true });
+      navigate(location.state?.from || '/', { replace: true });
+    } catch (error) {
+      setGoogleError(error.response?.data?.error || error.message || 'Google sign-in failed. Please try again.');
     }
   };
 
 
   return (
     <div className="flex flex-col gap-3 items-center justify-center">
-      <div className="[&>div]:w-full">
+      <div className="flex w-full justify-center overflow-hidden">
         <GoogleLogin
           onSuccess={handleGoogleSuccess}
-          onError={() => console.error('Google sign-in failed')}
-          width="100%"
+          onError={() => setGoogleError('Google sign-in could not start. Check that this site is allowed in your Google OAuth settings.')}
+          width="280"
           theme="outline"
           text="continue_with"
         />
       </div>
+      {isLoading && <p role="status" className="text-center text-xs text-pine/70">Signing in with Google…</p>}
+      {googleError && <p role="alert" className="w-full text-center text-sm text-red-600">{googleError}</p>}
 
       {/*
         Apple Sign In — uncomment once you have an Apple Developer key.
@@ -71,14 +74,14 @@ function SocialAuthButtons() {
           )}
         />
       */}
-      <button
+      {/* <button
         type="button"
         disabled
         title="Apple Sign In needs an Apple Developer key — not configured yet"
         className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-gray text-sm font-medium text-pine/40 cursor-not-allowed"
       >
         Continue with Apple (coming soon)
-      </button>
+      </button> */}
     </div>
   );
 }

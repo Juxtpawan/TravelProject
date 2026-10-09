@@ -16,3 +16,11 @@ export async function d1Query(sql, params = []) {
   const result = await bound.all();
   return result.results ?? [];
 }
+
+export async function d1Batch(operations) {
+  const statements = operations.map(({ sql, params = [] }) => {
+    const statement = env.DB.prepare(sql);
+    return params.length ? statement.bind(...params) : statement;
+  });
+  return env.DB.batch(statements);
+}

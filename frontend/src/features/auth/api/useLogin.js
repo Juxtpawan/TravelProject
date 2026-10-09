@@ -16,7 +16,15 @@ export function useLogin() {
     try {
       return await login(email, password);
     } catch (err) {
-      setError(err?.message || 'Invalid email or password.');
+      const serverMessage = err?.response?.data?.error;
+      const message = typeof serverMessage === 'string'
+        ? serverMessage
+        : err?.code === 'ECONNABORTED'
+          ? 'The login server took too long to respond. Make sure the backend is running, then try again.'
+          : !err?.response
+            ? 'Could not connect to the login server. Make sure the backend is running, then try again.'
+            : 'Login failed. Check your details and try again.';
+      setError(message);
       throw err;
     } finally {
       setIsLoading(false);

@@ -8,8 +8,12 @@ import AuthLayout from '../layouts/AuthLayout'; // 1. IMPORT YOUR AUTH LAYOUT
 // Pages
 import HomePage from '../pages/HomePage';
 import ExplorePage from '../pages/ExplorePage';
+import DestinationPage from '../pages/DestinationPage';
 import TripDetailsPage from '../pages/TripDetailsPage';
 import TripPage from '../pages/TripPage'; 
+import PricingPage from '../pages/PricingPage';
+import ProfilePage from '../pages/ProfilePage';
+import AiPlannerPage from '../pages/AiPlannerPage';
 
 // Auth Components
 import { LoginForm, SignupForm } from '../features/auth'; // 2. IMPORT FORMS
@@ -21,10 +25,10 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/explore', element: <ExplorePage /> },
-      { 
-        path: '/trips', 
-        element: <TripPage/>
-      },
+      { path: '/trips', element: <TripPage/> },
+      { path: '/pricing', element: <PricingPage /> },
+      { path: '/profile', element: <ProfilePage /> },
+      { path: '/ai', element: <AiPlannerPage /> },
     ],
   },
   
@@ -33,6 +37,7 @@ export const router = createBrowserRouter([
     element: <DashboardLayout />,
     children: [
       { path: '/trips/:tripId', element: <TripDetailsPage /> },
+      { path: '/locations/:slug', element: <DestinationPage /> },
     ],
   },
 

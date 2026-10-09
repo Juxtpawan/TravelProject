@@ -8,12 +8,16 @@ import { sqliteTable, text, integer, real, uniqueIndex, index } from 'drizzle-or
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(), // crypto.randomUUID()
   email: text('email').notNull().unique(),
+  username: text('username').unique(),
   name: text('name').notNull(),
   avatarUrl: text('avatar_url'),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   lastLoginAt: integer('last_login_at', { mode: 'timestamp' }),
+  subscriptionTier: text('subscription_tier').notNull().default('free'),
+  stripeCustomerId: text('stripe_customer_id'),
+  subscriptionStatus: text('subscription_status'), // 'active', 'canceled', 'past_due'
 });
 
 /**
@@ -86,7 +90,9 @@ export const destinations = sqliteTable('destinations', {
   state: text('state'),
   latitude: real('latitude'),
   longitude: real('longitude'),
+  geoCachedAt: text('geo_cached_at'),
   description: text('description'),
+  googlePlaceId: text('google_place_id').unique(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -127,4 +133,48 @@ export const placeSources = sqliteTable('place_sources', {
   lastCheckedAt: text('last_checked_at').notNull(),
 }, (table) => ({
   placeSourceIdx: index('place_sources_place_idx').on(table.placeId),
-}));
+}));
+
+/**
+ * trips — a user's vacation container.
+ * Groups dates, a specific destination, and later itinerary items.
+ */
+export const trips = sqliteTable('trips', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  destinationId: text('destination_id')
+    .notNull()
+    .references(() => destinations.id),
+  title: text('title').notNull(), // e.g., "Summer in Manali"
+  startDate: text('start_date').notNull(), // YYYY-MM-DD
+  endDate: text('end_date').notNull(), // YYYY-MM-DD
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => ({
+  userTripsIdx: index('trips_user_idx').on(table.userId),
+}));
+
+/**
+ * itinerary_items — specific places assigned to a day in a trip.
+ * Supports drag-and-drop ordering via dayIndex and orderIndex.
+ */
+export const itineraryItems = sqliteTable('itinerary_items', {
+  id: text('id').primaryKey(),
+  tripId: text('trip_id')
+    .notNull()
+    .references(() => trips.id, { onDelete: 'cascade' }),
+  placeId: text('place_id')
+    .notNull()
+    .references(() => places.id),
+  dayIndex: integer('day_index').notNull(), // 0 = Day 1, 1 = Day 2, etc.
+  orderIndex: integer('order_index').notNull(), // 0 = First stop, 1 = Second stop
+  startTime: text('start_time'), // e.g. "09:00"
+  endTime: text('end_time'), // e.g. "11:00"
+  note: text('note'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => ({
+  tripIdx: index('itinerary_items_trip_idx').on(table.tripId),
+}));

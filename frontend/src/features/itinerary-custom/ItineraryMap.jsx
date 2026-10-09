@@ -1,13 +1,15 @@
 import { useState, useCallback } from 'react';
-import { APIProvider, Map, Marker, InfoWindow } from '@vis.gl/react-google-maps';
+import { Map, Marker, InfoWindow, useApiLoadingStatus, APILoadingStatus } from '@vis.gl/react-google-maps';
 import { Layers } from 'lucide-react';
+import { ENV } from '../../config/env';
 
 
 function ItineraryMap({
     showMap, isLandscape, isItineraryExpanded, mapCenter, setMapCenter,
     mapZoom, setMapZoom, items, selectedItem, setSelectedItem, userLocation, setUserLocation
 }) {
-    const apiKey = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY || process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    const apiKey = ENV.GOOGLE_MAPS_KEY || '';
+    const mapsStatus = useApiLoadingStatus();
     const [locating, setLocating] = useState(false);
     const [locationError, setLocationError] = useState(null);
 
@@ -77,8 +79,11 @@ function ItineraryMap({
       ${showMap ? 'block' : 'hidden'}
       ${isLandscape ? (isItineraryExpanded ? 'w-[40%] lg:w-1/2' : 'w-[calc(100%-4rem)]') : 'w-full'}`}
         >
-            {apiKey ? (
-                <APIProvider apiKey={apiKey} libraries={['places']}>
+            {apiKey ? (mapsStatus === APILoadingStatus.FAILED || mapsStatus === APILoadingStatus.AUTH_FAILURE ? (
+                <div role="alert" className="grid h-full place-items-center bg-slate-100 p-6 text-center text-sm text-slate-700">
+                    Google Maps could not load. Enable the Maps JavaScript API and allow localhost referrers for this key.
+                </div>
+            ) : (
                     <>
                         <Map
                             zoom={mapZoom}
@@ -96,9 +101,25 @@ function ItineraryMap({
                             cameraControl={false}
                             mapTypeId={mapType}
                         >
-                            {items.map((item) => (
-                                <Marker key={item.id} position={{ lat: item.lat, lng: item.lng }} />
+                            {items.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng)).map((item) => (
+                                <Marker
+                                    key={item.id}
+                                    position={{ lat: item.lat, lng: item.lng }}
+                                    onClick={() => setSelectedItem(item)}
+                                />
                             ))}
+
+                            {selectedItem && Number.isFinite(selectedItem.lat) && Number.isFinite(selectedItem.lng) && (
+                                <InfoWindow
+                                    position={{ lat: selectedItem.lat, lng: selectedItem.lng }}
+                                    onCloseClick={() => setSelectedItem(null)}
+                                >
+                                    <div className="max-w-48 p-1">
+                                        <p className="font-bold text-pine">{selectedItem.title || selectedItem.place_name}</p>
+                                        <p className="mt-1 text-xs capitalize text-slate-500">{selectedItem.category}</p>
+                                    </div>
+                                </InfoWindow>
+                            )}
 
                             {userLocation && (
                                 <Marker
@@ -121,7 +142,7 @@ function ItineraryMap({
                             {/* The Main "Select Map" Trigger Button */}
                             <button
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                className="flex items-center gap-2 px-3 py-2 bg-white text-slate-800 font-bold text-xs border border-slate-200 rounded-xl shadow-md hover:bg-slate-50 transition active:scale-95"
+                                className="flex items-center gap-2 px-3 py-2 bg-white text-pine font-bold text-xs border border-slate-200 rounded-xl shadow-md hover:bg-slate-50 transition active:scale-95"
                             >
                                 <Layers size={14} className="text-slate-600" />
                                 <span>Select Map</span>
@@ -164,7 +185,7 @@ function ItineraryMap({
                                 onClick={handleZoomIn}
                                 disabled={mapZoom >= MAX_ZOOM}
                                 aria-label="Zoom in"
-                                className="w-9 h-9 flex items-center justify-center text-lg font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed border-b border-slate-200"
+                                className="w-9 h-9 flex items-center justify-center text-lg font-semibold text-pine hover:bg-slate-50 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed border-b border-slate-200"
                             >
                                 +
                             </button>
@@ -172,7 +193,7 @@ function ItineraryMap({
                                 onClick={handleZoomOut}
                                 disabled={mapZoom <= MIN_ZOOM}
                                 aria-label="Zoom out"
-                                className="w-9 h-9 flex items-center justify-center text-lg font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="w-9 h-9 flex items-center justify-center text-lg font-semibold text-pine hover:bg-slate-50 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 −
                             </button>
@@ -194,8 +215,7 @@ function ItineraryMap({
                             </div>
                         )}
                     </>
-                </APIProvider>
-            ) : (
+            )) : (
                 <div className="w-full h-full flex items-center justify-center bg-slate-100 text-red-500">Error: Key missing.</div>
             )}
         </div>

@@ -1,35 +1,39 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/useLogin';
 import SocialAuthButtons from './SocialAuthButtons';
 
 function LoginForm() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const { submit, isLoading, error } = useLogin();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await submit(email, password);
-      navigate('/');
+      await submit(identifier, password);
+      navigate(location.state?.from || '/', { replace: true });
     } catch {
-      // `error` from useLogin already holds the message — nothing else to do
+      // `error` from useLogin already holds the message
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div>
-        <label className="block text-sm font-medium text-pine mb-1">Email</label>
+        <label className="block text-sm font-medium text-pine mb-1">
+          Email or Travel Username
+        </label>
         <input
-          type="email"
+          type="text"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="username"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           className="w-full rounded-lg border border-gray px-3 py-2 text-sm text-pine focus:outline-none focus:ring-2 focus:ring-moss"
-          placeholder="you@example.com"
+          placeholder="you@example.com or NomadExplorer42"
         />
       </div>
 
@@ -38,6 +42,7 @@ function LoginForm() {
         <input
           type="password"
           required
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-lg border border-gray px-3 py-2 text-sm text-pine focus:outline-none focus:ring-2 focus:ring-moss"
@@ -45,12 +50,16 @@ function LoginForm() {
         />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 rounded-lg bg-pine text-white text-sm font-semibold hover:bg-moss transition-colors disabled:opacity-60"
+        className="w-full py-2.5 rounded-lg bg-pine text-white text-sm font-semibold hover:bg-moss transition-colors disabled:opacity-60 cursor-pointer"
       >
         {isLoading ? 'Logging in…' : 'Log in'}
       </button>
@@ -65,7 +74,7 @@ function LoginForm() {
 
       <p className="text-center text-sm text-pine/70 mt-2">
         New here?{' '}
-        <Link to="/auth/signup" className="text-moss font-medium hover:underline">
+        <Link to="/auth/signup" state={location.state} className="text-moss font-medium hover:underline">
           Create an account
         </Link>
       </p>

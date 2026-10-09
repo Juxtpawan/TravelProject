@@ -1,16 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-/* ── 1. LOAD GLOBAL VARIABLE FONT ─────────────────────── */
-@font-face {
-  font-family: 'Trip Sans VF';
-  src: url('./assets/fonts/TripSans-Variable.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  --font-trip-sans: "Trip Sans VF", "Trip Sans", arial, sans-serif;
+  --font-trip-sans: "Manrope", "Segoe UI", sans-serif;
   --font-trip-serif: "Georgia", "Times New Roman", "Century Schoolbook L", serif;
 
   /* ── Brand tokens (Simplified & Intuitive) ───────────────────────── */
@@ -31,16 +23,16 @@
   --color-bg-subtle: var(--color-sand);
 
   --color-text-primary: var(--color-pine);
-  --color-text-secondary: #4B5A54;
+  --color-text-secondary: color-mix(in srgb, var(--color-pine) 70%, white);
   --color-text-inverse: #FFFFFF;
-  --color-text-link: var(--color-green-medium);
+  --color-text-link: var(--color-pine);
 
   --color-border-default: var(--color-gray);
   --color-border-strong: #D8DCDA;
 
-  --color-btn-primary-bg: var(--color-pine);
-  --color-btn-primary-bg-hover: var(--color-green-medium);
-  --color-btn-primary-text: #FFFFFF;
+  --color-btn-primary-bg: #00eb5b;
+  --color-btn-primary-bg-hover: #00d050;
+  --color-btn-primary-text: var(--color-pine);
 
   --color-btn-secondary-bg: transparent;
   --color-btn-secondary-border: var(--color-pine);

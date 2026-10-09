@@ -4,19 +4,27 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes.js';
 import placesRoutes from './routes/places.routes.js';
+import subscriptionRoutes from './routes/subscription.routes.js';
+import tripsRoutes from './routes/trips.routes.js';
+import itineraryRoutes from './routes/itinerary.routes.js';
+import itineraryAiRoutes from './routes/itinerary-ai.routes.js';
+import usersRoutes from './routes/users.routes.js';
+import searchRoutes from './routes/search.routes.js';
 import { snapshotService } from './services/snapshot.service.js';
 
 const app = express();
 
-// FIX: process.env.FRONTEND_URL is not reliably populated in this setup —
-// same root cause your auth.routes.js fix already worked around for
-// GOOGLE_CLIENT_ID/JWT_SECRET. A static cors({ origin: process.env.X })
-// ends up with origin === undefined, so the `cors` package silently omits
-// Access-Control-Allow-Origin — exactly the browser error you're seeing.
-// Reading it per-request from req.cloudflare.env fixes it the same way.
+// FIX: Allow both configured FRONTEND_URL and any localhost port (5173-5179) for local dev.
+// This handles Vite incrementing the port when 5173 is already taken.
 app.use((req, res, next) => {
-  const allowedOrigin = req.cloudflare?.env?.FRONTEND_URL;
-  cors({ origin: allowedOrigin, credentials: true })(req, res, next);
+  const allowedOrigin = req.cloudflare?.env?.FRONTEND_URL || 'http://localhost:5173';
+  const requestOrigin = req.headers.origin || '';
+
+  // In local dev, allow any localhost:5173-5180 Vite port
+  const isLocalDev = /^http:\/\/localhost:(5173|5174|5175|5176|5177|5178|5179|5180)$/.test(requestOrigin);
+  const origin = isLocalDev ? requestOrigin : allowedOrigin;
+
+  cors({ origin, credentials: true })(req, res, next);
 });
 
 app.use(express.json());
@@ -24,6 +32,12 @@ app.use(cookieParser());
 
 app.use('/auth', authRoutes);
 app.use('/places', placesRoutes);
+app.use('/subscriptions', subscriptionRoutes);
+app.use('/trips', tripsRoutes);
+app.use('/itinerary', itineraryRoutes);
+app.use('/ai', itineraryAiRoutes);
+app.use('/users', usersRoutes);
+app.use('/search', searchRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -37,7 +51,7 @@ app.post('/admin/sync', async (req, res) => {
   snapshotService.runMonthlySync(env).catch(console.error);
 });
 
-// ── Check the latest sync job status ─────────────────────────────────────────
+// Check the latest sync job status
 app.get('/admin/sync/status', async (req, res) => {
   try {
     const { d1Query } = await import('./db/client.js');

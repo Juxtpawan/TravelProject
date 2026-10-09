@@ -1,23 +1,22 @@
-import { Outlet } from 'react-router-dom'; // Or whatever routing mechanism you mount
+import { Outlet, useLocation } from 'react-router-dom';
 import Header from "../shared/components/header/Header.jsx"
 
 export default function MainLayout() {
+  const { pathname } = useLocation();
+  const isAiPlanner = pathname === '/ai';
+
   return (
-    <div className="min-h-screen bg-off-white text-pine flex flex-col">
-      {/* Structural full-bleed header background */}
-      <Header/>
-
-      {/* Main body content restricted and centered automatically */}
-      <main className="app-container flex-grow py-6 md:py-8">
-        <Outlet /> 
+    <div className={`flex flex-col bg-[#f7f9f7] text-pine ${isAiPlanner ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
+      <Header />
+      <main className={`w-full flex-1 ${isAiPlanner ? 'min-h-0 overflow-hidden' : ''}`}>
+        <Outlet />
       </main>
-
-      {/* Optional full-bleed footer background with constrained content */}
-      <footer className="w-full bg-gray border-t border-gray-100 py-6 mt-auto">
-        <div className="app-container text-sm text-gray-500">
-          © {new Date().getFullYear()} TravelProject. All rights reserved.
+      {!isAiPlanner && <footer className="mt-auto border-t border-[#e5eae6] bg-white py-6">
+        <div className="app-container flex flex-col gap-2 text-sm text-[#718077] sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} TravelProject</span>
+          <span>Find your next favorite place.</span>
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }
