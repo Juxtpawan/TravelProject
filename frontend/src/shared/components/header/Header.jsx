@@ -10,7 +10,7 @@ function Header() {
   const navLinkClass = ({ isActive }) =>
     [
       'flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-      isActive ? 'bg-badge-bg text-pine font-bold' : 'text-[#35433d] hover:bg-[#f2f5f2]',
+      isActive ? 'bg-gray-200 text-pine font-bold' : 'text-[#35433d] hover:bg-[#f2f5f2]',
     ].join(' ');
 
   return (

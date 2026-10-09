@@ -80,7 +80,7 @@ export const sessions = sqliteTable(
 
 /**
  * destinations — top-level travel destinations (e.g., Manali, Goa)
- * Populated from Wikivoyage via the Wikimedia Enterprise API.
+ * Resolved from user-selected Google Places destinations.
  */
 export const destinations = sqliteTable('destinations', {
   id: text('id').primaryKey(),
@@ -117,18 +117,15 @@ export const places = sqliteTable('places', {
   destinationIdx: index('places_destination_idx').on(table.destinationId),
 }));
 
-/**
- * place_sources — provenance engine.
- * Lets the UI show "Found in 3 sources (Google, Wikivoyage, Tourism Board)".
- */
+/** Optional provenance retained for legacy place records and future imports. */
 export const placeSources = sqliteTable('place_sources', {
   id: text('id').primaryKey(),
   placeId: text('place_id')
     .notNull()
     .references(() => places.id, { onDelete: 'cascade' }),
-  sourceName: text('source_name').notNull(), // 'Wikivoyage' | 'Google Places'
+  sourceName: text('source_name').notNull(),
   sourceUrl: text('source_url'),
-  license: text('license'), // 'CC BY-SA 4.0'
+  license: text('license'),
   rawDataJson: text('raw_data_json'),
   lastCheckedAt: text('last_checked_at').notNull(),
 }, (table) => ({

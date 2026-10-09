@@ -4,6 +4,7 @@ import { ArrowLeftRight, LoaderCircle, MapPin, Route, Trash2, Undo2 } from 'luci
 import { PlaceSearch } from '../places';
 
 function ItinerarySidebar({ 
+  workspaceClassName = '',
   showList, isLandscape, isItineraryExpanded, setIsItineraryExpanded, 
   items, dayCount, destinationSlug, onAddPlace, addingPlace,
   onOptimizeDay, optimizingDay, optimizationMessage,
@@ -54,9 +55,9 @@ function ItinerarySidebar({
   };
 
   return (
-    <div className={`h-full overflow-y-auto p-6 flex flex-col justify-between transition-all duration-300 ease-in-out relative border-r border-slate-200
+    <div className={`h-full min-h-0 min-w-0 overflow-y-auto p-6 flex flex-col justify-between transition-all duration-300 ease-in-out relative rounded-lg border border-slate-200 ${workspaceClassName}
       ${showList ? 'flex' : 'hidden'}
-      ${isLandscape ? (isItineraryExpanded ? 'w-[60%] lg:w-1/2' : 'w-16') : 'w-full'}`}
+      ${isLandscape ? (isItineraryExpanded ? 'w-full' : 'w-16') : 'w-full'}`}
     >
       {isItineraryExpanded || !isLandscape ? (
         <div>

@@ -525,7 +525,7 @@ router.post('/:tripId/generate', authMiddleware, async (req, res) => {
 
     if (places.length === 0) {
       return res.status(400).json({
-        error: 'No places found for this destination. Run /places/seed/:destination first.'
+        error: 'No saved places were found for this destination.'
       });
     }
 

@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import ItineraryMap from './ItineraryMap';
 import ItinerarySidebar from './ItinerarySidebar';
+import MapWorkspaceLayout from '../../layouts/MapWorkspaceLayout';
 import TripAiAssistant from '../itinerary-ai/components/TripAiAssistant';
 import { useAuth } from '../auth';
 import { addTripItineraryItem, deleteTripItineraryItem, generateTripItinerary, getTrips, getTripItinerary, optimizeTripItineraryDay, reorderTripItinerary, updateTripItineraryItem } from '../trips/api/tripsApi';
@@ -314,10 +315,6 @@ export default function TripDetailsPage() {
     }
   };
 
-  // ── Visibility helpers (for your existing sidebar/map props) ──────────────
-  const showList = isLandscape ? true : mobileView === 'list';
-  const showMap  = isLandscape ? true : mobileView === 'map';
-
   if (!loading && (!user || !trip)) {
     return (
       <div className="grid h-full place-items-center p-6">
@@ -331,10 +328,9 @@ export default function TripDetailsPage() {
   }
 
   return (
-    <div className="flex flex-col w-full h-full">
-      {/* Top Bar */}
-      <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+    <>
+      <MapWorkspaceLayout
+        header={<div className="flex min-w-0 items-center gap-3">
           <button onClick={() => navigate('/trips')} className="text-slate-500 hover:text-pine text-sm font-medium">
             ← Back
           </button>
@@ -345,31 +341,8 @@ export default function TripDetailsPage() {
               📍 {trip.destination_name}
             </span>
           )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* AI Draft button */}
-          <button
-            onClick={() => setShowAiPanel(!showAiPanel)}
-            className="flex items-center gap-1.5 bg-linear-to-r from-[#087a50] to-[#3f9b6a] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow hover:opacity-90 transition"
-          >
-            🤖 AI Draft
-          </button>
-          {/* Mobile toggle */}
-          {!isLandscape && (
-            <button
-              onClick={() => setMobileView(mobileView === 'list' ? 'map' : 'list')}
-              className="text-xs font-bold px-3 py-1.5 bg-slate-100 text-pine rounded-lg hover:bg-slate-200 transition"
-            >
-              {mobileView === 'list' ? '🗺️ Map' : '📋 List'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* AI Panel (slides in below top bar) */}
-      {showAiPanel && (
-        <div className="shrink-0 bg-[#f1f8f3] border-b border-[#d3e8d8] p-4 flex flex-wrap gap-3 items-end">
+        </div>}
+        auxiliary={showAiPanel && <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#d3e8d8] bg-[#f1f8f3] p-4">
           <div>
             <label className="block text-xs font-semibold text-[#17633f] mb-1">Travel Style</label>
             <select value={aiStyle} onChange={e => setAiStyle(e.target.value)}
@@ -394,67 +367,55 @@ export default function TripDetailsPage() {
             {aiLoading ? '✨ Generating…' : '✨ Generate Itinerary'}
           </button>
           <p className="text-xs text-[#8b6637] self-center">This replaces your current itinerary.</p>
-        </div>
-      )}
-
-      {/* Main split layout */}
-      <div className="flex grow overflow-hidden">
-        {loading ? (
-          <div className="grow flex items-center justify-center text-slate-500">
+        </div>}
+        sidebar={loading ? <div className="flex h-full items-center justify-center text-slate-500">
             Loading…
-          </div>
-        ) : (
-          <>
-            {/* ── Sidebar: uses YOUR ItinerarySidebar component ─────────────── */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                <ItinerarySidebar
-                  showList={showList}
-                  isLandscape={isLandscape}
-                  isItineraryExpanded={isItineraryExpanded}
-                  setIsItineraryExpanded={setIsItineraryExpanded}
-                  items={items}
-                  dayCount={Math.max(1, Math.round((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1)}
-                  destinationSlug={trip.destination_slug}
-                  onAddPlace={handleAddPlace}
-                  addingPlace={addingPlace}
-                  onOptimizeDay={handleOptimizeDay}
-                  optimizingDay={optimizingDay}
-                  optimizationMessage={optimizationMessage}
-                  setMapCenter={setMapCenter}
-                  setMapZoom={setMapZoom}
-                  setSelectedItem={setSelectedItem}
-                  setMobileView={setMobileView}
-                  selectedDay={selectedDay}
-                  onSelectDay={handleSelectDay}
-                  onUpdateItem={handleUpdateItem}
-                  onMoveItem={handleMoveItem}
-                  onRemoveItem={handleRemoveItem}
-                  removedItem={removedItem}
-                  onUndoRemove={handleUndoRemove}
-                  onReplaceItem={handleReplaceItem}
-                />
-              </SortableContext>
-            </DndContext>
-
-            {/* ── Map: uses YOUR ItineraryMap component ─────────────────────── */}
-            <ItineraryMap
-              showMap={showMap}
-              isLandscape={isLandscape}
-              isItineraryExpanded={isItineraryExpanded}
-              mapCenter={mapCenter}
-              setMapCenter={setMapCenter}
-              mapZoom={mapZoom}
-              setMapZoom={setMapZoom}
-              items={items.filter(item => Number(item.day_index ?? 0) === selectedDay)}
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              userLocation={userLocation}
-              setUserLocation={setUserLocation}
-            />
-          </>
-        )}
-      </div>
+          </div> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <ItinerarySidebar
+                showList
+                isLandscape={isLandscape}
+                isItineraryExpanded={isItineraryExpanded}
+                setIsItineraryExpanded={setIsItineraryExpanded}
+                items={items}
+                dayCount={Math.max(1, Math.round((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1)}
+                destinationSlug={trip.destination_slug}
+                onAddPlace={handleAddPlace}
+                addingPlace={addingPlace}
+                onOptimizeDay={handleOptimizeDay}
+                optimizingDay={optimizingDay}
+                optimizationMessage={optimizationMessage}
+                setMapCenter={setMapCenter}
+                setMapZoom={setMapZoom}
+                setSelectedItem={setSelectedItem}
+                setMobileView={setMobileView}
+                selectedDay={selectedDay}
+                onSelectDay={handleSelectDay}
+                onUpdateItem={handleUpdateItem}
+                onMoveItem={handleMoveItem}
+                onRemoveItem={handleRemoveItem}
+                removedItem={removedItem}
+                onUndoRemove={handleUndoRemove}
+                onReplaceItem={handleReplaceItem}
+              />
+            </SortableContext>
+          </DndContext>}
+        map={!loading && <ItineraryMap
+          showMap
+          mapCenter={mapCenter}
+          setMapCenter={setMapCenter}
+          mapZoom={mapZoom}
+          setMapZoom={setMapZoom}
+          items={items.filter(item => Number(item.day_index ?? 0) === selectedDay)}
+          selectedItem={selectedItem}
+          setSelectedItem={setSelectedItem}
+          userLocation={userLocation}
+          setUserLocation={setUserLocation}
+        />}
+        mobileView={mobileView}
+        onToggleView={() => setMobileView(view => view === 'list' ? 'map' : 'list')}
+        sidebarExpanded={isItineraryExpanded}
+      />
       <TripAiAssistant
         tripId={tripId}
         onItineraryUpdated={updatedItems => {
@@ -470,6 +431,6 @@ export default function TripDetailsPage() {
           setSelectedItem(null);
         }}
       />
-    </div>
+    </>
   );
 }

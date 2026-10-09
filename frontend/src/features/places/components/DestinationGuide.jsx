@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { APILoadingStatus, AdvancedMarker, InfoWindow, Map as GoogleMap, useApiLoadingStatus, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { ArrowLeft, BedDouble, BookOpen, Compass, Map as MapIcon, MapPin, Utensils, Landmark, LoaderCircle, Star } from 'lucide-react';
+import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { ArrowLeft, BedDouble, BookOpen, Compass, MapPin, PanelLeftClose, Utensils, Landmark, LoaderCircle, Star } from 'lucide-react';
 import { getDestinationGuide, resolveDestination } from '../api/placesApi';
-import { ENV } from '../../../config/env';
+import { InteractiveMap, NumberedPin, NumberedPlaceMarker } from '../../maps';
+import MapWorkspaceLayout from '../../../layouts/MapWorkspaceLayout';
+import PlaceDetailsPanel from './PlaceDetailsPanel';
 
 const categories = [
   { key: 'attraction', title: 'Things to do', singular: 'place to visit', Icon: Landmark, color: 'var(--color-green-medium)', border: 'var(--color-pine)', types: ['tourist_attraction', 'museum', 'art_gallery', 'historical_landmark', 'park', 'zoo', 'aquarium', 'amusement_park', 'place_of_worship'] },
@@ -38,9 +40,6 @@ function attachGuideContent(place, entities = []) {
     ...place,
     summary: entity.why_go || entity.summary || place.summary,
     tips: Array.isArray(entity.tips) ? entity.tips : [],
-    evidenceQuote: entity.evidence_quote || '',
-    source: entity.source_domain || entity.source_url || 'Travel guide',
-    sourceUrl: entity.source_url || '',
   } : place;
 }
 
@@ -62,39 +61,8 @@ function FitPlaces({ places, center }) {
       points.forEach((point) => bounds.extend(point));
       map.fitBounds(bounds, 48);
     }
-  }, [map, fitKey, center?.lat, center?.lng]);
+  }, [map, places, fitKey, center]);
   return null;
-}
-
-function PlaceMarker({ place, category, selected, onClick }) {
-  return (
-    <AdvancedMarker
-      position={{ lat: Number(place.latitude), lng: Number(place.longitude) }}
-      title={`${category.title}: ${place.name}`}
-      zIndex={selected ? 1000 : undefined}
-      onClick={onClick}
-    >
-      <NumberedPin number={place.markerNumber} category={category} selected={selected} />
-    </AdvancedMarker>
-  );
-}
-
-function NumberedPin({ number, category, selected = false, small = false }) {
-  const pinPath = 'M24 2C11.85 2 2 11.85 2 24c0 14.3 20.3 32.9 21.17 33.68a1.25 1.25 0 0 0 1.66 0C25.7 56.9 46 38.3 46 24 46 11.85 36.15 2 24 2Z';
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 48 60"
-      className={`${small ? 'h-9 w-7' : 'h-14 w-11'} overflow-visible drop-shadow-md transition-transform ${selected ? 'scale-110' : 'hover:scale-105'}`}
-    >
-      <path d={pinPath} fill="white" />
-      <path d={pinPath} fill={category.border} transform="translate(2 2) scale(.917)" />
-      <path d={pinPath} fill={category.color} transform="translate(4 4) scale(.833)" />
-      <text x="24" y={small ? '26' : '29'} textAnchor="middle" dominantBaseline="central" fill="#000000" fontSize={small ? '19' : '24'} fontWeight="900" fontFamily="inherit">
-        {number}
-      </text>
-    </svg>
-  );
 }
 
 function destinationCenter(destination) {
@@ -105,41 +73,48 @@ function destinationCenter(destination) {
 
 export default function DestinationPage() {
   const { slug } = useParams();
-  const mapsStatus = useApiLoadingStatus();
   const placesLibrary = useMapsLibrary('places');
-  const [guide, setGuide] = useState(null);
+  const [guideState, setGuideState] = useState({ slug: null, guide: null, error: '' });
   const [destinationDetails, setDestinationDetails] = useState(null);
   const [activeCategory, setActiveCategory] = useState('attraction');
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [googleResults, setGoogleResults] = useState({});
-  const [searchingCategory, setSearchingCategory] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [mobileView, setMobileView] = useState('list');
+  const [mapCenter, setMapCenter] = useState({ lat: 20, lng: 0 });
+  const [mapZoom, setMapZoom] = useState(12);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const cardRefs = useRef(new Map());
   const crawlPollCount = useRef(0);
   const [crawlPollTick, setCrawlPollTick] = useState(0);
+  const guide = guideState.slug === slug ? guideState.guide : null;
+  const loading = guideState.slug !== slug;
+  const error = guideState.slug === slug ? guideState.error : '';
   const destination = guide?.destination;
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
-    setGuide(null);
-    setDestinationDetails(null);
     crawlPollCount.current = 0;
-    setCrawlPollTick(0);
-    setGoogleResults({});
-    setSelectedId(null);
-    setDescriptionExpanded(false);
-    setActiveCategory('attraction');
     getDestinationGuide(slug)
-      .then((result) => { if (active) setGuide(result); })
-      .catch((requestError) => {
-        if (active) setError(requestError.response?.status === 404 ? 'This destination is not saved yet. Search for it and choose a suggested destination first.' : 'We could not load this destination guide. Please try again.');
+      .then((result) => {
+        if (!active) return;
+        setGuideState({ slug, guide: result, error: '' });
+        setDestinationDetails(null);
+        setGoogleResults({});
+        setSelectedId(null);
+        setDescriptionExpanded(false);
+        setActiveCategory('attraction');
+        setCrawlPollTick(0);
+        const location = destinationCenter(result.destination);
+        if (result.destination?.latitude != null && result.destination?.longitude != null) setMapCenter(location);
       })
-      .finally(() => { if (active) setLoading(false); });
+      .catch((requestError) => {
+        if (active) setGuideState({
+          slug,
+          guide: null,
+          error: requestError.response?.status === 404 ? 'This destination is not saved yet. Search for it and choose a suggested destination first.' : 'We could not load this destination guide. Please try again.',
+        });
+      });
     return () => { active = false; };
   }, [slug]);
 
@@ -150,7 +125,7 @@ export default function DestinationPage() {
       crawlPollCount.current += 1;
       try {
         const refreshed = await getDestinationGuide(slug);
-        setGuide(refreshed);
+        setGuideState({ slug, guide: refreshed, error: '' });
       } catch {
         // Keep the guide usable if the optional crawler service is temporarily down.
       }
@@ -160,20 +135,12 @@ export default function DestinationPage() {
   }, [slug, guide?.crawler?.status, crawlPollTick]);
 
   useEffect(() => {
-    const placeId = guide?.destination?.google_place_id;
+    const placeId = destination?.google_place_id;
     if (!placesLibrary || !placeId || destinationDetails?.placeId === placeId) return undefined;
-    const geoTime = Date.parse(guide.destination.geo_cached_at || '');
+    const geoTime = Date.parse(destination.geo_cached_at || '');
     const geoAge = Date.now() - geoTime;
     const geoIsFresh = Number.isFinite(geoTime) && geoAge >= 0 && geoAge < 30 * 24 * 60 * 60 * 1000;
-    if (geoIsFresh && guide.destination.latitude != null && guide.destination.longitude != null) {
-      setDestinationDetails({
-        placeId,
-        name: guide.destination.name,
-        address: '',
-        location: { lat: Number(guide.destination.latitude), lng: Number(guide.destination.longitude) },
-      });
-      return undefined;
-    }
+    if (geoIsFresh && destination.latitude != null && destination.longitude != null) return undefined;
     let active = true;
     const place = new placesLibrary.Place({ id: placeId });
     place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] })
@@ -182,38 +149,46 @@ export default function DestinationPage() {
         const location = place.location ? { lat: place.location.lat(), lng: place.location.lng() } : null;
         setDestinationDetails({
           placeId,
-          name: place.displayName?.text || guide.destination.name,
+          name: place.displayName?.text || destination.name,
           address: place.formattedAddress || '',
           location,
         });
-        if (location) resolveDestination(guide.destination.name, placeId, location).catch(() => {});
+        if (location) {
+          setMapCenter(location);
+          resolveDestination(destination.name, placeId, location).catch(() => {});
+        }
       })
       .catch(() => { if (active) setDestinationDetails({ placeId, location: null }); });
     return () => { active = false; };
-  }, [placesLibrary, guide?.destination?.google_place_id, guide?.destination?.name, guide?.destination?.geo_cached_at, guide?.destination?.latitude, guide?.destination?.longitude, destinationDetails?.placeId]);
+  }, [placesLibrary, destination?.google_place_id, destination?.name, destination?.geo_cached_at, destination?.latitude, destination?.longitude, destinationDetails?.placeId]);
 
   const savedPlaces = useMemo(() => (guide?.places || []).map((place) => ({
     ...place,
     id: place.google_place_id || place.id,
     category: normalizedCategory(place.category),
     formattedAddress: place.formatted_address || place.address || '',
-    source: place.source_name || 'TravelProject guide',
   })), [guide?.places]);
   const crawlerEntities = guide?.crawler?.entities || EMPTY_ENTITIES;
 
   const localCategoryPlaces = useMemo(() => savedPlaces.filter((place) => place.category === activeCategory)
     .map((place) => attachGuideContent(place, crawlerEntities)), [savedPlaces, crawlerEntities, activeCategory]);
   const category = categories.find((item) => item.key === activeCategory) || categories[0];
-  const cachedGooglePlaces = googleResults[activeCategory] || [];
+  const cachedGooglePlaces = googleResults[activeCategory] || EMPTY_ENTITIES;
   const places = useMemo(() => {
     const localIds = new Set(localCategoryPlaces.map((place) => place.id));
     const combined = [...localCategoryPlaces, ...cachedGooglePlaces.filter((place) => !localIds.has(place.id))].slice(0, 20);
     return combined.map((place, index) => ({ ...place, markerNumber: index + 1, category: activeCategory }));
   }, [localCategoryPlaces, cachedGooglePlaces, activeCategory]);
-  const hasSavedCenter = destination?.latitude != null && destination?.longitude != null
-    && Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
-  const destinationLocation = destinationDetails?.location || (hasSavedCenter ? destinationCenter(destination) : null);
-  const initialMapCenter = destinationLocation || { lat: 20, lng: 0 };
+  const destinationLatitude = destination?.latitude;
+  const destinationLongitude = destination?.longitude;
+  const hasSavedCenter = destinationLatitude != null && destinationLongitude != null
+    && Number.isFinite(Number(destinationLatitude)) && Number.isFinite(Number(destinationLongitude));
+  const savedCenter = useMemo(() => hasSavedCenter
+    ? { lat: Number(destinationLatitude), lng: Number(destinationLongitude) }
+    : null, [hasSavedCenter, destinationLatitude, destinationLongitude]);
+  const destinationLocation = destinationDetails?.location || savedCenter;
+  const searchingCategory = Boolean(placesLibrary && destination?.google_place_id && destinationLocation
+    && googleResults[activeCategory] === undefined && localCategoryPlaces.length < 20 && category.types.length);
   const mapPlaces = useMemo(() => {
     const allResults = Object.values(googleResults).flat();
     const unique = new Map();
@@ -229,8 +204,7 @@ export default function DestinationPage() {
     if (!placesLibrary || !destination?.google_place_id || !destinationLocation || googleResults[activeCategory] !== undefined) return undefined;
     if (localCategoryPlaces.length >= 20 || !category.types.length) return undefined;
     let active = true;
-    setSearchingCategory(true);
-    const center = destinationLocation;
+    const center = { lat: destinationLocation.lat, lng: destinationLocation.lng };
     placesLibrary.Place.searchNearby({
       locationRestriction: { center, radius: 20000 },
       maxResultCount: Math.max(1, 20 - localCategoryPlaces.length),
@@ -256,13 +230,29 @@ export default function DestinationPage() {
       if (active) setGoogleResults((current) => ({ ...current, [activeCategory]: mapped }));
     }).catch(() => {
       if (active) setGoogleResults((current) => ({ ...current, [activeCategory]: [] }));
-    }).finally(() => { if (active) setSearchingCategory(false); });
+    });
     return () => { active = false; };
-  }, [placesLibrary, destination?.google_place_id, destinationLocation?.lat, destinationLocation?.lng, activeCategory, category, localCategoryPlaces.length, googleResults, crawlerEntities]);
+  }, [placesLibrary, destination?.google_place_id, destinationLocation, activeCategory, category, localCategoryPlaces.length, googleResults, crawlerEntities]);
 
   const selectPlace = useCallback((place) => {
     setSelectedId(place.id);
+    const lat = Number(place.latitude);
+    const lng = Number(place.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setMapCenter({ lat, lng });
+      setMapZoom(15);
+    }
+    if (window.innerWidth < 768) setMobileView('map');
   }, []);
+
+  const zoomToSelectedPlace = useCallback(() => {
+    if (!selectedPlace) return;
+    const lat = Number(selectedPlace.latitude);
+    const lng = Number(selectedPlace.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    setMapCenter({ lat, lng });
+    setMapZoom(17);
+  }, [selectedPlace]);
 
   useEffect(() => {
     const card = cardRefs.current.get(selectedId);
@@ -281,23 +271,28 @@ export default function DestinationPage() {
   const sourcesInProgress = Number(sourceCounts.PENDING || 0) + Number(sourceCounts.FETCHED || 0);
 
   return (
-    <main className="relative h-full min-h-0 overflow-hidden bg-[#f7f9f7] p-2 sm:p-3">
-      <div className="mx-auto grid h-full min-h-0 w-full max-w-[1600px] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
-        <header className="row-start-1 flex min-w-0 items-center gap-3 rounded-lg border border-[#e2e8e3] bg-white px-4 py-3 sm:px-6 xl:col-start-1 xl:row-start-1">
+    <MapWorkspaceLayout
+      header={<div className={`flex min-w-0 items-center gap-3 ${sidebarExpanded ? '' : 'md:justify-center'}`}>
           <Link to="/explore" aria-label="Back to Explore" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#526158] hover:bg-[#f1f5f2]"><ArrowLeft size={19} /></Link>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-pine"><Compass size={13} />Destination guide</div>
-            <h1 className="truncate text-xl font-extrabold text-pine sm:text-2xl">{destinationDetails?.name || destination.name}</h1>
+          <div className={`min-w-0 flex-1 ${sidebarExpanded ? '' : 'md:hidden'}`}>
+
+            <h1 className="truncate uppercase text-xl font-extrabold text-pine sm:text-2xl">{destinationDetails?.name || destination.name}</h1>
             <p className="truncate text-xs text-[#748078]">{destinationDetails?.address || [destination.state, destination.country].filter(Boolean).join(' · ') || 'Explore places nearby'}</p>
           </div>
-          <div className="hidden items-center gap-2 text-xs text-[#657269] sm:flex"><MapPin size={15} />{places.length} places</div>
-        </header>
+      </div>}
 
-        <section className={`${mobileView === 'list' ? 'flex' : 'hidden'} row-start-2 min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[#e2e8e3] bg-[#f7f9f7] xl:col-start-1 xl:row-start-2 xl:flex`} aria-label={`${category.title} list`}>
+      sidebar={<div className="relative h-full w-full min-h-0 min-w-0">
+        <section className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[#e2e8e3] bg-[#f7f9f7] ${sidebarExpanded ? '' : 'md:hidden'}`} aria-label={`${category.title} list`}>
           <div className="shrink-0 border-b border-[#e5ebe6] bg-white px-5 py-4 sm:px-7">
             <div className="flex items-end justify-between gap-3">
               <div><p className="text-xs font-bold uppercase tracking-wider text-pine">Explore {destination.name}</p><h2 className="mt-1 text-2xl font-extrabold text-pine">{category.title}</h2></div>
-              <span className="shrink-0 text-sm text-[#718077]">Top {places.length}</span>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="text-sm text-[#718077]">Top {places.length}</span>
+                <button type="button" onClick={() => setSidebarExpanded(false)} aria-label="Collapse places list" title="Collapse places list"
+                  className="hidden min-h-9 items-center gap-1.5 rounded-lg border border-[#dfe7e1] px-2.5 text-xs font-semibold text-pine transition hover:bg-[#f3f7f4] md:inline-flex">
+                  <PanelLeftClose size={15} />Collapse List
+                </button>
+              </div>
             </div>
             {destination.description && <div className="mt-2 max-w-3xl">
               <p className={`text-sm leading-5 text-[#68766e] ${descriptionExpanded ? '' : 'line-clamp-3'}`}>{destination.description}</p>
@@ -307,7 +302,7 @@ export default function DestinationPage() {
             <nav className="mt-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Guide categories">
               {categories.map(({ key, title, Icon, color }) => {
                 const count = savedPlaces.filter((place) => place.category === key).length;
-                return <button key={key} type="button" onClick={() => { setActiveCategory(key); setSelectedId(null); setSearchingCategory(false); }} aria-pressed={activeCategory === key}
+                return <button key={key} type="button" onClick={() => { setActiveCategory(key); setSelectedId(null); }} aria-pressed={activeCategory === key}
                   className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${activeCategory === key ? 'border-green-medium bg-badge-bg text-pine' : 'border-[#e0e7e1] bg-white text-[#59675e] hover:bg-[#f7faf7]'}`}>
                   <Icon size={15} style={{ color }} />{title}<span className="text-[10px] opacity-65">{count || ''}</span>
                 </button>;
@@ -332,7 +327,7 @@ export default function DestinationPage() {
                       {place.formattedAddress && <span className="mt-1 block line-clamp-2 text-xs leading-4 text-[#748078]">{place.formattedAddress}</span>}
                       {place.summary && <span className="mt-1 block line-clamp-2 text-xs leading-4 text-[#59675e]">{place.summary}</span>}
                       {place.tips?.length > 0 && <span className="mt-1 block line-clamp-1 text-[11px] text-[#738078]">Tip: {place.tips[0]}</span>}
-                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-pine">{place.source || 'View on map'} <MapPin size={12} /></span>
+                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-pine">View on map <MapPin size={12} /></span>
                     </span>
                   </button>
                   {place.photoAttributions?.map((attribution) => <a key={attribution.uri || attribution.displayName} href={attribution.uri || place.photoUrl} target="_blank" rel="noreferrer" className="block truncate px-3 pb-2 text-[10px] text-[#748078] underline">Photo: {attribution.displayName}</a>)}
@@ -372,35 +367,40 @@ export default function DestinationPage() {
             {crawlerStatus === 'queued' || crawlerStatus === 'pending' ? <span className="inline-flex items-center gap-2"><LoaderCircle size={14} className="animate-spin text-pine" />Finding sources and extracting travel-guide details in the background{sourcesInProgress > 0 ? ` · ${sourcesInProgress} source${sourcesInProgress === 1 ? '' : 's'} processing` : ''}.</span> : guideFacts.length || crawlerEntities.length ? `${guideFacts.length + crawlerEntities.length} guide details are available from crawler sources.` : 'Guide details are collected from saved places and current map results.'}
           </div>}
         </section>
+        {!sidebarExpanded && <button type="button" onClick={() => setSidebarExpanded(true)} aria-label="Expand places list" title="Expand places list"
+          className="absolute inset-0 z-10 hidden cursor-pointer items-center justify-center rounded-lg bg-slate-900/5 transition hover:bg-slate-900/10 md:flex">
+          <span className="transform -rotate-90 whitespace-nowrap tracking-wider font-bold text-slate-600 text-xs">EXPAND VIEW</span>
+        </button>}
+      </div>}
 
-        <section className={`${mobileView === 'map' ? 'block' : 'hidden'} relative row-start-2 min-h-0 min-w-0 overflow-hidden rounded-lg border border-[#e2e8e3] bg-[#e9efea] xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:block`} aria-label="Map of places">
-          {mapsStatus === APILoadingStatus.LOADED ? <>
-            <GoogleMap id="destination-guide-map" mapId={ENV.GOOGLE_MAP_ID} defaultCenter={initialMapCenter} defaultZoom={12} gestureHandling="greedy" mapTypeControl={false} streetViewControl={false} fullscreenControl={false} className="h-full min-h-0 w-full">
-              <FitPlaces places={mapPlaces} center={destinationLocation} />
-              {mapPlaces.map((place) => {
-                const placeCategory = categories.find((item) => item.key === place.category) || categories[0];
-                return <PlaceMarker key={place.id} place={place} category={placeCategory} selected={selectedId === place.id} onClick={() => { setActiveCategory(place.category); selectPlace(place); }} />;
-              })}
-              {selectedPlace && <InfoWindow position={{ lat: Number(selectedPlace.latitude), lng: Number(selectedPlace.longitude) }} onCloseClick={() => setSelectedId(null)}>
-                <div className="max-w-56 p-1"><p className="font-bold text-pine">{selectedPlace.name}</p></div>
-              </InfoWindow>}
-            </GoogleMap>
-            <div className="absolute bottom-4 left-4 hidden rounded-xl border border-white/80 bg-white/95 p-3 shadow-lg xl:block">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#69766e]">Map categories</p>
-              <div className="flex flex-wrap gap-x-3 gap-y-2">{categories.map((item) => <span key={item.key} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#526158]"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.title}</span>)}</div>
-            </div>
-          </> : <div className="grid h-full min-h-0 place-items-center p-6 text-center">
-            <div className="max-w-md rounded-xl border border-[#dce5dd] bg-white p-6 shadow-sm">
-              <MapPin size={26} className="mx-auto text-pine" />
-              <h2 className="mt-3 font-bold text-pine">{mapsStatus === APILoadingStatus.FAILED || mapsStatus === APILoadingStatus.AUTH_FAILURE ? 'Google Maps is unavailable' : 'Loading Google Maps…'}</h2>
-              {(mapsStatus === APILoadingStatus.FAILED || mapsStatus === APILoadingStatus.AUTH_FAILURE) && <p className="mt-2 text-sm leading-6 text-[#68766e]">Check your internet connection and confirm that the Maps JavaScript API is enabled and your API key allows this site. Your place list is still available.</p>}
-            </div>
-          </div>}
-        </section>
-      </div>
-      <button type="button" onClick={() => setMobileView((view) => view === 'list' ? 'map' : 'list')} className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-pine px-5 text-sm font-bold text-white shadow-xl transition hover:bg-green-deep xl:hidden" aria-label={mobileView === 'list' ? 'Show map' : 'Show list'}>
-        {mobileView === 'list' ? <><MapIcon size={17} />Show map</> : <><BookOpen size={17} />Show list</>}
-      </button>
-    </main>
+      map={<div className="relative h-full min-h-0 min-w-0" aria-label="Map of places">
+          <InteractiveMap id="destination-guide-map" mapCenter={mapCenter} setMapCenter={setMapCenter} mapZoom={mapZoom} setMapZoom={setMapZoom} overlayOpen={Boolean(selectedPlace)}>
+            <FitPlaces places={mapPlaces} center={destinationLocation} />
+            {mapPlaces.map((place) => {
+              const placeCategory = categories.find((item) => item.key === place.category) || categories[0];
+              return <NumberedPlaceMarker key={place.id}
+                position={{ lat: Number(place.latitude), lng: Number(place.longitude) }}
+                title={place.name}
+                number={place.markerNumber}
+                category={placeCategory}
+                selected={selectedId === place.id}
+                onClick={() => { setActiveCategory(place.category); selectPlace(place); }}
+              />;
+            })}
+          </InteractiveMap>
+          {selectedPlace && <PlaceDetailsPanel
+            key={selectedPlace.id}
+            place={selectedPlace}
+            category={categories.find((item) => item.key === selectedPlace.category) || categories[0]}
+            onClose={() => setSelectedId(null)}
+            onZoomToPlace={zoomToSelectedPlace}
+          />}
+        </div>}
+      mobileView={mobileView}
+      onToggleView={() => setMobileView((view) => view === 'list' ? 'map' : 'list')}
+      sidebarExpanded={sidebarExpanded}
+      collapsedHeaderOnly
+      hideMobileHeader
+    />
   );
 }

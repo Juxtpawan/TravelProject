@@ -30,10 +30,10 @@ export default function HomePage() {
         <div className="app-container relative flex min-h-90 items-center py-12">
           <div className="max-w-2xl text-white">
             <p className="mb-4 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-[#d5efad]">
-              <Sparkles size={16} /> Make room for somewhere new
+              <Sparkles size={16} /> Make your trip planned and organized
             </p>
             <h1 className="max-w-xl text-4xl font-extrabold leading-[1.08] sm:text-5xl">
-              Find your next favorite place.
+              Plan your trip with ease.
             </h1>
             <p className="mt-4 max-w-lg text-base leading-7 text-white/90 sm:text-lg">
               Explore places travelers love, then turn the good ideas into a trip that is yours.

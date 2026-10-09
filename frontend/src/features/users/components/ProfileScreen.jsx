@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   UserRound,
-  AtSign,
   Shield,
   Dices,
   Trash2,
@@ -14,7 +13,6 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Compass,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../auth';
@@ -43,7 +41,8 @@ export default function ProfileScreen() {
   });
 
   const [activeTab, setActiveTab] = useState('details'); // 'details' | 'security' | 'danger'
-  const [loading, setLoading] = useState(true);
+  const [loadedUserId, setLoadedUserId] = useState(null);
+  const loading = authLoading || Boolean(user?.id && loadedUserId !== user.id);
   const [saving, setSaving] = useState(false);
   const [generatingUsername, setGeneratingUsername] = useState(false);
   const [copiedHandle, setCopiedHandle] = useState(false);
@@ -69,10 +68,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user?.id) {
-      setLoading(false);
-      return;
-    }
+    if (!user?.id) return undefined;
 
     let isMounted = true;
     getProfile(user.id)
@@ -89,7 +85,7 @@ export default function ProfileScreen() {
         toast.error(err.response?.data?.error || 'Failed to load profile.');
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (isMounted) setLoadedUserId(user.id);
       });
 
     return () => {

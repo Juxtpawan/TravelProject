@@ -5,40 +5,34 @@ import { autocompleteDestinations, getDestinationPlaceDetails, lookupDestination
 /** Show Google Places Autocomplete predictions as the user types. */
 export default function DestinationSearch({ onSearch }) {
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionState, setSuggestionState] = useState({ query: '', status: 'idle', items: [] });
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
-  const [autocompleteFailed, setAutocompleteFailed] = useState(false);
   const [error, setError] = useState('');
   const sessionToken = useRef(null);
   const searchQuery = useRef('');
+  const input = query.trim();
+  const suggestions = suggestionState.query === input ? suggestionState.items : [];
+  const autocompleteLoading = input.length >= 2 && !selected
+    && (suggestionState.query !== input || suggestionState.status === 'loading');
+  const autocompleteFailed = suggestionState.query === input && suggestionState.status === 'failed';
 
   useEffect(() => {
-    const input = query.trim();
-    if (input.length < 2 || selected) {
-      setSuggestions([]);
-      setAutocompleteLoading(false);
-      return undefined;
-    }
+    if (input.length < 2 || selected) return undefined;
 
     let active = true;
-    setAutocompleteLoading(true);
     const timer = setTimeout(async () => {
-      setAutocompleteFailed(false);
+      if (active) setSuggestionState({ query: input, status: 'loading', items: [] });
       try {
         if (!sessionToken.current) sessionToken.current = crypto.randomUUID();
         searchQuery.current = input;
         const response = await autocompleteDestinations(input, sessionToken.current);
-        if (active) setSuggestions(response.suggestions || []);
+        if (active) setSuggestionState({ query: input, status: 'loaded', items: response.suggestions || [] });
       } catch (requestError) {
         if (active) {
-          setSuggestions([]);
-          setAutocompleteFailed(true);
+          setSuggestionState({ query: input, status: 'failed', items: [] });
           setError(requestError.response?.data?.error || 'Google destination suggestions could not be loaded.');
         }
-      } finally {
-        if (active) setAutocompleteLoading(false);
       }
     }, 250);
 
@@ -46,7 +40,7 @@ export default function DestinationSearch({ onSearch }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, selected]);
+  }, [input, selected]);
 
   const openSavedDestination = (destination) => {
     onSearch?.(destination);
@@ -96,9 +90,7 @@ export default function DestinationSearch({ onSearch }) {
   const updateQuery = (value) => {
     setQuery(value);
     setSelected(null);
-    setSuggestions([]);
     setError('');
-    setAutocompleteFailed(false);
     if (!value.trim()) {
       searchQuery.current = '';
       sessionToken.current = null;
@@ -135,7 +127,7 @@ export default function DestinationSearch({ onSearch }) {
       {showDropdown && <ul className="absolute left-0 right-28 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)]" role="listbox">
         {suggestions.map((prediction) => (
           <li key={prediction.placeId}>
-            <button type="button" onClick={() => { setSelected(prediction); setSuggestions([]); setError(''); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-[#f5faf6]">
+          <button type="button" onClick={() => { setSelected(prediction); setError(''); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-[#f5faf6]">
               <MapPin size={17} className="shrink-0 text-pine" />
               <span className="min-w-0 flex-1 truncate">{prediction.description || prediction.mainText || ''}</span>
             </button>

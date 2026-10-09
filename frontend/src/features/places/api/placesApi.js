@@ -30,11 +30,6 @@ export async function resolveDestination(query, googlePlaceId, location) {
   return data.destination;
 }
 
-export async function getDestination(slug) {
-  const { data } = await apiClient.get(`/places/${encodeURIComponent(slug)}`);
-  return data;
-}
-
 export async function getDestinationGuide(slug) {
   const { data } = await apiClient.get(`/places/${encodeURIComponent(slug)}/guide`);
   return data;
