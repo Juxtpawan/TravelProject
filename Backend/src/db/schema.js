@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
 
 
 /**
@@ -133,6 +133,21 @@ export const placeSources = sqliteTable('place_sources', {
 }));
 
 /**
+ * placeIdentifiers — durable provider IDs mapped to TravelProject's internal
+ * entity key. Google Place IDs are stored here without Google place details.
+ */
+export const placeIdentifiers = sqliteTable('place_identifiers', {
+  provider: text('provider').notNull(),
+  externalId: text('external_id').notNull(),
+  entityId: text('entity_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+}, (table) => ({
+  placeIdentifierPk: primaryKey({ columns: [table.provider, table.externalId] }),
+  placeIdentifierEntityIdx: index('place_identifiers_entity_idx').on(table.entityId),
+}));
+
+/**
  * trips — a user's vacation container.
  * Groups dates, a specific destination, and later itinerary items.
  */
@@ -152,6 +167,49 @@ export const trips = sqliteTable('trips', {
 }, (table) => ({
   userTripsIdx: index('trips_user_idx').on(table.userId),
 }));
+
+/**
+ * user_wishlists — legacy JSON snapshots, read only during migration to the
+ * normalized wishlist_lists / wishlist_places tables.
+ */
+export const userWishlists = sqliteTable('user_wishlists', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  wishlistsJson: text('wishlists_json').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/** User-owned list metadata, normalized for efficient per-place lookups. */
+export const wishlistLists = sqliteTable('wishlist_lists', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  listId: text('list_id').notNull(),
+  name: text('name').notNull(),
+  createdAt: text('created_at').notNull(),
+  position: integer('position').notNull().default(0),
+}, (table) => ({
+  wishlistListPk: primaryKey({ columns: [table.userId, table.listId] }),
+}));
+
+/** Place identity and user-side organization only; never a Google detail snapshot. */
+export const wishlistPlaces = sqliteTable('wishlist_places', {
+  userId: text('user_id').notNull(),
+  listId: text('list_id').notNull(),
+  provider: text('provider').notNull(),
+  placeId: text('place_id').notNull(),
+  destinationSlug: text('destination_slug').notNull().default(''),
+  category: text('category').notNull().default('attraction'),
+  savedAt: text('saved_at').notNull(),
+}, (table) => ({
+  wishlistPlacePk: primaryKey({ columns: [table.userId, table.listId, table.provider, table.placeId] }),
+  wishlistPlacesLookupIdx: index('wishlist_places_provider_place_idx').on(table.provider, table.placeId),
+  wishlistPlacesListIdx: index('wishlist_places_user_list_idx').on(table.userId, table.listId),
+}));
+
+export const wishlistPreferences = sqliteTable('wishlist_preferences', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  activeListId: text('active_list_id').notNull(),
+});
 
 /**
  * itinerary_items — specific places assigned to a day in a trip.

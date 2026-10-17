@@ -1,10 +1,8 @@
-import { MapPin, Star, X, ZoomIn } from 'lucide-react';
+import { MapPin, X, ZoomIn } from 'lucide-react';
 import { NumberedPin } from '../../maps';
 
 /** Destination place details shown over the map. */
 export default function PlaceDetailsPanel({ place, category, onClose, onZoomToPlace }) {
-  const reviewCount = place.user_rating_count || place.userRatingCount;
-
   return (
     <section aria-label={`${place.name} details`} className="absolute inset-x-3 bottom-3 z-20 flex h-[38%] max-h-[38%] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-xl sm:inset-x-4 sm:bottom-4">
       <header className="flex min-w-0 items-center gap-1.5 border-b border-slate-100 p-1.5 sm:p-2">
@@ -16,7 +14,7 @@ export default function PlaceDetailsPanel({ place, category, onClose, onZoomToPl
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#68766e]">
             <span>{category.title}</span>
-            {place.rating != null && <span className="inline-flex items-center gap-1 font-semibold"><Star size={12} className="fill-[#e7a82d] text-[#e7a82d]" />{place.rating}{reviewCount ? ` · ${Number(reviewCount).toLocaleString()} reviews` : ''}</span>}
+            {place.source === 'Google Maps' && <span translate="no" className="rounded-full border border-[#e3e9e4] bg-[#f8faf8] px-2 py-0.5 text-xs font-normal text-[#5e5e5e]">Google Maps</span>}
           </div>
           {place.formattedAddress && <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-[#718077]"><MapPin size={12} className="shrink-0" />{place.formattedAddress}</p>}
         </div>
@@ -26,7 +24,7 @@ export default function PlaceDetailsPanel({ place, category, onClose, onZoomToPl
         </div>
       </header>
 
-      <div className="min-h-0 overflow-y-auto px-4 py-3 text-sm leading-5 text-[#526158] sm:px-5">
+      <div className="app-scrollbar min-h-0 overflow-y-auto px-4 py-3 text-sm leading-5 text-[#526158] sm:px-5">
         <p>{place.summary || place.description || 'Explore this place and its surroundings.'}</p>
         {place.tips?.length > 0 && <div className="mt-3">
           <h3 className="text-xs font-bold uppercase tracking-wide text-pine">Travel notes</h3>

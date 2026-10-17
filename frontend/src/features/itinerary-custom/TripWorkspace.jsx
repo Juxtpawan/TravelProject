@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { ArrowLeft, PanelLeftClose } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -42,11 +43,21 @@ const MANALI_CENTER = { lat: 32.2432, lng: 77.1892 };
 export default function TripDetailsPage() {
   const { tripId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const originPath = typeof location.state?.from === 'string'
+    && location.state.from.startsWith('/')
+    && !location.state.from.startsWith('//')
+    ? location.state.from
+    : null;
+  const backPath = location.state?.fromProfile ? '/profile' : originPath || '/trips';
+  const backLabel = location.state?.fromProfile
+    ? 'Back to profile'
+    : originPath?.startsWith('/locations/') ? 'Back to destination' : 'Back to my trips';
   const [searchParams] = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
 
   // ── Responsive layout state ───────────────────────────────────────────────
-  const [isLandscape, setIsLandscape] = useState(window.innerWidth >= 768);
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth >= 729);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'map'
   const [isItineraryExpanded, setIsItineraryExpanded] = useState(true);
 
@@ -82,7 +93,7 @@ export default function TripDetailsPage() {
 
   // ── Responsive resize listener ────────────────────────────────────────────
   useEffect(() => {
-    const onResize = () => setIsLandscape(window.innerWidth >= 768);
+    const onResize = () => setIsLandscape(window.innerWidth >= 729);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -321,7 +332,7 @@ export default function TripDetailsPage() {
         <div className="max-w-md text-center">
           <h1 className="text-xl font-bold text-pine">{loadError ? 'Trip unavailable' : 'Trip not found'}</h1>
           <p className="mt-2 text-sm text-[#66736b]">{loadError || 'This trip may have been removed or belong to another account.'}</p>
-          <button onClick={() => navigate('/trips')} className="mt-5 rounded-full bg-btn-primary-bg px-5 py-2.5 text-sm font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover">Back to my trips</button>
+          <button onClick={() => navigate(backPath)} className="mt-5 rounded-full bg-btn-primary-bg px-5 py-2.5 text-sm font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover">{backLabel}</button>
         </div>
       </div>
     );
@@ -330,17 +341,21 @@ export default function TripDetailsPage() {
   return (
     <>
       <MapWorkspaceLayout
-        header={<div className="flex min-w-0 items-center gap-3">
-          <button onClick={() => navigate('/trips')} className="text-slate-500 hover:text-pine text-sm font-medium">
-            ← Back
-          </button>
-          <span className="text-slate-300">|</span>
-          <h1 className="font-bold text-pine truncate">{trip?.title || 'Trip Planner'}</h1>
-          {trip?.destination_name && (
-            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-              📍 {trip.destination_name}
-            </span>
-          )}
+        header={<div className="relative flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <button type="button" onClick={() => navigate(backPath)} aria-label={backLabel} title={backLabel}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-pine">
+              <ArrowLeft size={15} />
+            </button>
+            <span className="text-slate-300">|</span>
+          </div>
+          <h1 className={`absolute left-1/2 min-w-0 max-w-[calc(100%-5rem)] -translate-x-1/2 truncate text-center font-bold text-pine ${isLandscape ? 'min-[729px]:max-w-[calc(100%-16rem)]' : ''}`}>
+            {trip?.title || 'Trip Planner'}
+          </h1>
+          {isLandscape && <button type="button" onClick={() => setIsItineraryExpanded(false)} aria-label="Collapse itinerary list" title="Collapse itinerary list"
+            className="hidden h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-pine transition hover:bg-slate-100 min-[729px]:inline-flex">
+            <PanelLeftClose size={15} />
+          </button>}
         </div>}
         auxiliary={showAiPanel && <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#d3e8d8] bg-[#f1f8f3] p-4">
           <div>
@@ -374,6 +389,8 @@ export default function TripDetailsPage() {
             <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
               <ItinerarySidebar
                 showList
+                backTo={backPath}
+                backLabel={backLabel}
                 isLandscape={isLandscape}
                 isItineraryExpanded={isItineraryExpanded}
                 setIsItineraryExpanded={setIsItineraryExpanded}

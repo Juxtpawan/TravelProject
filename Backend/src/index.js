@@ -10,8 +10,20 @@ import itineraryRoutes from './routes/itinerary.routes.js';
 import itineraryAiRoutes from './routes/itinerary-ai.routes.js';
 import usersRoutes from './routes/users.routes.js';
 import searchRoutes from './routes/search.routes.js';
+import wishlistsRoutes from './routes/wishlists.routes.js';
+import placeImagesRoutes from './features/place-images/placeImages.routes.js';
+import { purgeExpiredGoogleDestinationCoordinates } from './features/places/placeIdentity.repository.js';
 
 const app = express();
+
+// API clients such as Axios need a response body on every GET. Express's
+// default ETag handling can turn repeated API requests into 304 responses,
+// which Axios treats as rejected responses with no JSON body to read.
+app.disable('etag');
+app.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // FIX: Allow both configured FRONTEND_URL and any localhost port (5173-5179) for local dev.
 // This handles Vite incrementing the port when 5173 is already taken.
@@ -31,12 +43,14 @@ app.use(cookieParser());
 
 app.use('/auth', authRoutes);
 app.use('/places', placesRoutes);
+app.use('/place-images', placeImagesRoutes);
 app.use('/subscriptions', subscriptionRoutes);
 app.use('/trips', tripsRoutes);
 app.use('/itinerary', itineraryRoutes);
 app.use('/ai', itineraryAiRoutes);
 app.use('/users', usersRoutes);
 app.use('/search', searchRoutes);
+app.use('/wishlists', wishlistsRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -45,4 +59,7 @@ app.listen(PORT);
 
 export default {
   fetch: httpServerHandler({ port: PORT }).fetch,
+  scheduled(_controller, env, context) {
+    context.waitUntil(purgeExpiredGoogleDestinationCoordinates(env.DB));
+  },
 };

@@ -76,7 +76,10 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    if (destinationQuery.trim().length < 2 || brief?.destination) return undefined;
+    if (destinationQuery.trim().length < 3 || brief?.destination) {
+      if (!destinationQuery.trim() || brief?.destination) placesSession.current = null;
+      return undefined;
+    }
     let active = true;
     const timeoutId = window.setTimeout(async () => {
       try {
@@ -92,7 +95,7 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
           setUsingSavedDestinations(false);
         }
       }
-    }, 250);
+    }, 500);
     return () => { active = false; window.clearTimeout(timeoutId); };
   }, [destinationQuery, brief?.destination]);
 
@@ -116,10 +119,11 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
     setIsResolvingDestination(true);
     setDestinationError('');
     try {
-      const place = await getDestinationPlaceDetails(selection.placeId, placesSession.current);
-      const name = place.name || selection.mainText || destinationQuery.trim();
-      const destination = await resolveDestination(name, place.placeId || selection.placeId, place.location || undefined);
+      const sessionToken = placesSession.current;
       placesSession.current = null;
+      const place = await getDestinationPlaceDetails(selection.placeId, sessionToken);
+      const name = destinationQuery.trim();
+      const destination = await resolveDestination(name, place.placeId || selection.placeId, place.location || undefined);
       setDestinationQuery('');
       setPlaceSuggestions([]);
       startDestinationDiscovery(destination.slug).catch(() => {});
@@ -136,7 +140,7 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
 
   return (
     <section className="relative z-10 flex h-full min-h-0 w-full max-w-3xl min-w-0 flex-col overflow-hidden">
-      <div className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-1 py-5 sm:px-4 sm:py-7 ${isWelcome ? 'justify-end' : ''}`} aria-live="polite">
+      <div className={`app-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-1 py-5 sm:px-4 sm:py-7 ${isWelcome ? 'justify-end' : ''}`} aria-live="polite">
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-text-secondary"><LoaderCircle size={17} className="animate-spin" />Opening your trip…</div>
         ) : (
@@ -195,7 +199,7 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
 
       <form onSubmit={submit} className="mx-auto w-full max-w-2xl shrink-0 bg-white/95 px-0 pb-2 pt-3 sm:px-4 sm:pb-4">
         {suggestions.length > 0 && !isLoading && (
-          <div className="mb-3 max-h-24 overflow-y-auto">
+          <div className="app-scrollbar mb-3 max-h-24 overflow-y-auto">
             <p className={`mb-2 text-xs font-semibold text-text-secondary ${isWelcome ? 'text-center' : ''}`}>{!brief?.destination ? 'A few places to start' : 'Quick choices'}</p>
             <div className={`flex flex-wrap gap-2 ${isWelcome ? 'justify-center' : ''}`}>
               {suggestions.map(({ label, message }) => (
@@ -236,7 +240,7 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
             {placeSuggestions.length > 0 && (
               <div className="absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-lg border border-border-default bg-white shadow-lg">
               {usingSavedDestinations && <p className="border-b border-border-default px-4 py-2 text-xs text-text-secondary">Showing saved destinations while Google Places is unavailable.</p>}
-              <ul className="max-h-56 overflow-auto py-1" role="listbox">
+              <ul className="app-scrollbar max-h-56 overflow-auto py-1" role="listbox">
                 {placeSuggestions.map(suggestion => (
                   <li key={suggestion.placeId} role="option">
                     <button type="button" disabled={isResolvingDestination || isSending || isGenerating} onClick={() => chooseDestination(suggestion)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-bg-subtle disabled:opacity-50">
@@ -245,6 +249,7 @@ export default function PlannerConversation({ messages, isWelcome, brief, destin
                   </li>
                 ))}
               </ul>
+              {!usingSavedDestinations && <p translate="no" className="border-t border-border-default px-4 py-1.5 text-right text-xs font-normal text-[#5e5e5e]">Google Maps</p>}
               </div>
             )}
           </div>

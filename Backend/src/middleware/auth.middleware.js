@@ -7,14 +7,20 @@ export async function authMiddleware(req, res, next) {
   const token = req.cookies?.access_token;
   if (!token) return res.status(401).json({ error: 'Not authenticated.' });
 
-  try {
-    const jwtSecret = req.cloudflare?.env?.JWT_SECRET || process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      console.error('[authMiddleware] JWT_SECRET is not configured.');
-      return res.status(500).json({ error: 'Authentication is not configured on the server.' });
-    }
+  const jwtSecret = req.cloudflare?.env?.JWT_SECRET || process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('[authMiddleware] JWT_SECRET is not configured.');
+    return res.status(500).json({ error: 'Authentication is not configured on the server.' });
+  }
 
-    const payload = await verifyAccessToken(token, jwtSecret);
+  let payload;
+  try {
+    payload = await verifyAccessToken(token, jwtSecret);
+  } catch {
+    return res.status(401).json({ error: 'Session expired. Please log in again.' });
+  }
+
+  try {
     const user = await findUserById(payload.sub);
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
 
@@ -35,7 +41,9 @@ export async function authMiddleware(req, res, next) {
     };
     next();
   } catch (err) {
-    console.error('[authMiddleware] verify failed:', err?.message || err);
-    res.status(401).json({ error: 'Session expired. Please log in again.' });
+    // Database or user hydration errors are server failures, not expired
+    // sessions. Returning 401 here made the frontend silently log users out.
+    console.error('[authMiddleware] user lookup failed:', err?.message || err);
+    res.status(500).json({ error: 'Could not load the signed-in account.' });
   }
 }

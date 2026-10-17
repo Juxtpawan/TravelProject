@@ -1,0 +1,11 @@
+@media (min-width: 729px) and (max-width: 1200px) {
+  .workspace-map-grid.workspace-map-split {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  }
+}
+
+@media (min-width: 1201px) {
+  .workspace-map-grid.workspace-map-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

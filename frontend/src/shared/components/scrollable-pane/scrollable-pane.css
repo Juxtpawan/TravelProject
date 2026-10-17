@@ -1,0 +1,30 @@
+.app-scrollbar,
+.workspace-pane-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #9aaba0 transparent;
+}
+
+.app-scrollbar::-webkit-scrollbar,
+.workspace-pane-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.app-scrollbar::-webkit-scrollbar-track,
+.workspace-pane-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scrollbar::-webkit-scrollbar-thumb,
+.workspace-pane-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #9aaba0;
+  background-clip: padding-box;
+}
+
+.app-scrollbar::-webkit-scrollbar-thumb:hover,
+.workspace-pane-scroll::-webkit-scrollbar-thumb:hover {
+  background: #66796d;
+  background-clip: padding-box;
+}

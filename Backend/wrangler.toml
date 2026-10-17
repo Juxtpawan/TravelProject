@@ -2,6 +2,9 @@ name = "travelproject-api"
 main = "src/index.js"
 compatibility_date = "2026-09-14"
 
+[triggers]
+crons = ["0 * * * *"] # Expire Google Places coordinates before the 30-day limit.
+
 [[d1_databases]]
 binding = "DB"
 database_name = "travelproject-db"
@@ -16,7 +19,8 @@ bucket_name = "cloudflare-r2-bucket" # Put your real bucket name here
 FRONTEND_URL = "http://localhost:5173"
 CLIENT_ORIGIN = "http://localhost:5173"
 GOOGLE_CLIENT_ID = "175150986126-sunu8ppbbaicb4u41gc9hs89bk2cgfq0.apps.googleusercontent.com"
-GOOGLE_MAPS_API_KEY = "" # Paste your Google Maps/Places API Key here
+# Set locally in .dev.vars; remotely with `wrangler secret put GOOGLE_MAPS_API_KEY`.
+# Keep server-side Google keys out of plaintext [vars].
 CRAWLER_API_URL = "" # Set to the deployed crawler api-worker URL; keep its shared secret in Wrangler secrets
 
 # Set GEMINI_API_KEY or GOOGLE_AI_API_KEY in .dev.vars; remotely use wrangler secret put GEMINI_API_KEY.

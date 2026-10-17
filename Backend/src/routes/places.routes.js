@@ -1,5 +1,7 @@
 import express from 'express';
 import { d1Query } from '../db/client.js';
+import { purgeExpiredGoogleDestinationCoordinates, saveGooglePlaceIdentifiers } from '../features/places/placeIdentity.repository.js';
+import { authMiddleware } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -10,7 +12,8 @@ function googleMapsApiKey(req) {
 router.post('/autocomplete', async (req, res) => {
   const input = typeof req.body?.input === 'string' ? req.body.input.trim() : '';
   const sessionToken = typeof req.body?.sessionToken === 'string' ? req.body.sessionToken : '';
-  if (input.length < 2 || input.length > 200) return res.status(400).json({ error: 'Enter at least two characters.' });
+  if (input.length < 3 || input.length > 200) return res.status(400).json({ error: 'Enter at least three characters.' });
+  if (!/^[A-Za-z0-9_-]{1,36}$/.test(sessionToken)) return res.status(400).json({ error: 'Start a new destination search session.' });
   const apiKey = googleMapsApiKey(req);
   if (!apiKey) return res.status(503).json({ error: 'Google Places search is not configured.' });
   try {
@@ -57,7 +60,7 @@ router.post('/autocomplete', async (req, res) => {
 router.post('/details', async (req, res) => {
   const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId.trim() : '';
   const sessionToken = typeof req.body?.sessionToken === 'string' ? req.body.sessionToken : '';
-  if (!placeId || placeId.length > 255) return res.status(400).json({ error: 'Choose a suggested destination.' });
+  if (!placeId || placeId.length > 4096) return res.status(400).json({ error: 'Choose a suggested destination.' });
   const apiKey = googleMapsApiKey(req);
   if (placeId.startsWith('local:')) {
     const localId = placeId.slice('local:'.length);
@@ -74,11 +77,15 @@ router.post('/details', async (req, res) => {
         : null,
     });
   }
+  if (!/^[A-Za-z0-9_-]{1,36}$/.test(sessionToken)) return res.status(400).json({ error: 'Choose a destination from the current search session.' });
   if (!apiKey) return res.status(503).json({ error: 'Google Places search is not configured.' });
   try {
     const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`);
     if (sessionToken) url.searchParams.set('sessionToken', sessionToken);
-    const response = await fetch(url, { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'id,displayName,location,formattedAddress' } });
+    // Location is a Place Details Essentials field. Keep displayName out of
+    // this session-ending request; the selected prediction already supplies
+    // the transient label for the current user interaction.
+    const response = await fetch(url, { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'id,location' } });
     if (!response.ok) {
       const failure = await response.json().catch(() => ({}));
       console.warn('[Places] Place details were rejected by Google:', response.status, failure.error?.status || 'unknown');
@@ -87,17 +94,39 @@ router.post('/details', async (req, res) => {
         : 'That destination could not be loaded.' });
     }
     const place = await response.json();
-    res.json({ placeId: place.id, name: place.displayName?.text || place.formattedAddress || '', location: place.location ? { lat: place.location.latitude, lng: place.location.longitude } : null });
+    res.json({ placeId: place.id, location: place.location ? { lat: place.location.latitude, lng: place.location.longitude } : null });
   } catch (error) {
     console.error('[Places] Place details request failed:', error?.message || error);
     res.status(502).json({ error: 'That destination could not be loaded.' });
   }
 });
 
+// Persist only Google Place IDs so crawler-owned records can match them later.
+// No names, categories, addresses, photos, ratings, or search payloads are stored.
+router.post('/identifiers/google', authMiddleware, async (req, res) => {
+  const requestedIds = req.body?.placeIds;
+  if (!Array.isArray(requestedIds) || requestedIds.length > 60) {
+    return res.status(400).json({ error: 'Send up to 60 Google Place IDs.' });
+  }
+  const placeIds = [...new Set(requestedIds.filter((value) => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0 && value.length <= 4096))];
+  if (placeIds.length !== requestedIds.length) {
+    return res.status(400).json({ error: 'Every Google Place ID must be a unique non-empty string.' });
+  }
+  try {
+    if (placeIds.length) await saveGooglePlaceIdentifiers(placeIds);
+    return res.json({ stored: placeIds.length });
+  } catch (error) {
+    console.error('Google Place ID storage failed:', error);
+    return res.status(500).json({ error: 'Could not save place identifiers.' });
+  }
+});
+
 router.get('/', async (_req, res) => {
   try {
     const destinations = await d1Query(
-      `SELECT d.id, d.name, d.slug, d.country, d.state, d.description,
+      `SELECT d.id, d.name, d.slug, d.country, d.state, d.description, d.google_place_id,
               COUNT(p.id) AS places_count
        FROM destinations d
        LEFT JOIN places p ON p.destination_id = d.id
@@ -123,6 +152,7 @@ router.get('/lookup', async (req, res) => {
   }
 
   try {
+    await purgeExpiredGoogleDestinationCoordinates();
     const slug = query.toLowerCase().normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const [destination] = await d1Query(
@@ -147,7 +177,7 @@ router.post('/resolve', async (req, res) => {
   const hasLocation = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
     && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
   const isLocalPlaceId = googlePlaceId.startsWith('local:');
-  if (query.length < 2 || query.length > 120 || (!googlePlaceId && !hasLocation) || googlePlaceId.length > 255) {
+  if (query.length < 2 || query.length > 120 || (!googlePlaceId && !hasLocation) || googlePlaceId.length > 4096) {
     return res.status(400).json({ error: 'Choose a valid suggested destination.' });
   }
 
@@ -171,13 +201,22 @@ router.post('/resolve', async (req, res) => {
       [googlePlaceId]
     );
     if (byPlaceId) {
+      const [slugOwner] = slug === byPlaceId.slug ? [] : await d1Query(
+        'SELECT id FROM destinations WHERE slug = ? LIMIT 1',
+        [slug]
+      );
+      const resolvedSlug = slugOwner && slugOwner.id !== byPlaceId.id
+        ? `${slug}-${byPlaceId.id.slice(0, 8)}`
+        : slug;
+      const now = new Date().toISOString();
       if (hasLocation) {
-        const now = new Date().toISOString();
-        await d1Query('UPDATE destinations SET latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
-          [latitude, longitude, now, now, byPlaceId.id]);
-        return res.json({ destination: { ...byPlaceId, latitude, longitude, geo_cached_at: now } });
+        await d1Query('UPDATE destinations SET name = ?, slug = ?, latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
+          [query, resolvedSlug, latitude, longitude, now, now, byPlaceId.id]);
+        return res.json({ destination: { ...byPlaceId, name: query, slug: resolvedSlug, latitude, longitude, geo_cached_at: now } });
       }
-      return res.json({ destination: byPlaceId });
+      await d1Query('UPDATE destinations SET name = ?, slug = ?, updated_at = ? WHERE id = ?',
+        [query, resolvedSlug, now, byPlaceId.id]);
+      return res.json({ destination: { ...byPlaceId, name: query, slug: resolvedSlug } });
     }
 
     const [bySlug] = await d1Query(
@@ -191,16 +230,16 @@ router.post('/resolve', async (req, res) => {
       const now = new Date().toISOString();
       if (hasLocation) {
         if (isLocalPlaceId) {
-          await d1Query('UPDATE destinations SET latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
-            [latitude, longitude, now, now, bySlug.id]);
+          await d1Query('UPDATE destinations SET name = ?, latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
+            [query, latitude, longitude, now, now, bySlug.id]);
         } else {
-          await d1Query('UPDATE destinations SET google_place_id = ?, latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
-            [googlePlaceId, latitude, longitude, now, now, bySlug.id]);
+          await d1Query('UPDATE destinations SET name = ?, google_place_id = ?, latitude = ?, longitude = ?, geo_cached_at = ?, updated_at = ? WHERE id = ?',
+            [query, googlePlaceId, latitude, longitude, now, now, bySlug.id]);
         }
       } else {
-        if (!isLocalPlaceId) await d1Query('UPDATE destinations SET google_place_id = ?, updated_at = ? WHERE id = ?', [googlePlaceId, now, bySlug.id]);
+        if (!isLocalPlaceId) await d1Query('UPDATE destinations SET name = ?, google_place_id = ?, updated_at = ? WHERE id = ?', [query, googlePlaceId, now, bySlug.id]);
       }
-      return res.json({ destination: { ...bySlug, google_place_id: isLocalPlaceId ? bySlug.google_place_id : googlePlaceId, ...(hasLocation ? { latitude, longitude, geo_cached_at: now } : {}) } });
+      return res.json({ destination: { ...bySlug, name: query, google_place_id: isLocalPlaceId ? bySlug.google_place_id : googlePlaceId, ...(hasLocation ? { latitude, longitude, geo_cached_at: now } : {}) } });
     }
 
     if (isLocalPlaceId) return res.status(404).json({ error: 'That saved destination could not be found.' });
@@ -245,6 +284,7 @@ router.post('/:slug/discover', async (req, res) => {
 router.get('/:slug/guide', async (req, res) => {
   const { slug } = req.params;
   try {
+    await purgeExpiredGoogleDestinationCoordinates();
     const [destination] = await d1Query(
       'SELECT * FROM destinations WHERE slug = ? LIMIT 1',
       [slug]

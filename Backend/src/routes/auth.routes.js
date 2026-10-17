@@ -19,34 +19,26 @@ router.post('/signup', async (req, res) => {
 
   const existing = await usersQueries.findUserByEmail(email);
   if (existing) {
-    const existingEmailCred = await usersQueries.findCredentialByUserAndProvider(existing.id, 'email');
-    if (existingEmailCred?.password_hash) {
-      return res.status(409).json({ error: 'An account with this email already exists. Please log in instead.' });
-    }
-
-    // Account exists via Google/social but has no password yet. Link password credential to this account!
-    const passwordHash = await hashPassword(password);
-    await usersQueries.upsertEmailCredential({ userId: existing.id, passwordHash, now });
-    await usersQueries.touchLastLogin(existing.id, now);
-
-    // If existing user lacks a username, generate one
-    if (!existing.username) {
-      const username = await generateUniqueTravelUsername(d1Query);
-      await d1Query('UPDATE users SET username = ? WHERE id = ?', [username, existing.id]);
-      existing.username = username;
-    }
-
-    return respondWithSession(res, existing, getRequestEnv(req));
+    return res.status(409).json({ error: 'An account with this email already exists. Please log in instead.' });
   }
 
   const userId = crypto.randomUUID();
   const username = await generateUniqueTravelUsername(d1Query);
   const passwordHash = await hashPassword(password);
 
-  await usersQueries.createUser({ id: userId, email, username, name, now });
+  try {
+    await usersQueries.createUser({ id: userId, email, username, name, now });
+  } catch (error) {
+    // The unique database constraint handles two signup requests arriving together.
+    // Turn that race into the same response as the normal duplicate check.
+    if (await usersQueries.findUserByEmail(email)) {
+      return res.status(409).json({ error: 'An account with this email already exists. Please log in instead.' });
+    }
+    throw error;
+  }
   await usersQueries.createCredential({ id: crypto.randomUUID(), userId, provider: 'email', passwordHash, now });
 
-  return respondWithSession(res, { id: userId, email, username, name, avatar_url: null }, getRequestEnv(req));
+  return respondWithSession(req, res, { id: userId, email, username, name, avatar_url: null }, getRequestEnv(req));
 });
 
 router.post('/login', async (req, res) => {
@@ -81,7 +73,7 @@ router.post('/login', async (req, res) => {
   }
 
   await usersQueries.touchLastLogin(user.id, new Date());
-  return respondWithSession(res, user, getRequestEnv(req));
+  return respondWithSession(req, res, user, getRequestEnv(req));
 });
 
 router.post('/google', async (req, res) => {
@@ -157,7 +149,7 @@ router.post('/google', async (req, res) => {
   }
 
   await usersQueries.touchLastLogin(user.id, now);
-  return respondWithSession(res, user, env);
+  return respondWithSession(req, res, user, env);
 });
 
 router.post('/logout', (req, res) => {
@@ -203,18 +195,21 @@ function getRequestEnv(req) {
   };
 }
 
-async function respondWithSession(res, user, env) {
+async function respondWithSession(req, res, user, env) {
   if (!env?.JWT_SECRET) {
     return res.status(503).json({ error: 'Authentication is not configured on the API.' });
   }
-  const token = await signAccessToken({ sub: user.id, email: user.email }, env.JWT_SECRET, '15m');
+  const token = await signAccessToken({ sub: user.id, email: user.email }, env.JWT_SECRET, '7d');
 
   res.cookie('access_token', token, {
     httpOnly: true,
-    secure: true,
+    // Local Wrangler dev runs over http://localhost. Secure cookies are rejected
+    // by non-browser clients and some browsers there, making /auth/me appear logged out.
+    // Production hosts remain Secure by default.
+    secure: !isLocalDevelopmentHost(req),
     sameSite: 'lax',
     path: '/',
-    maxAge: 15 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
   res.json({
@@ -224,6 +219,11 @@ async function respondWithSession(res, user, env) {
     name: user.name,
     avatarUrl: user.avatar_url ?? user.avatarUrl ?? null,
   });
+}
+
+function isLocalDevelopmentHost(req) {
+  const host = String(req.hostname || req.headers.host || '').toLowerCase().split(':')[0];
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
 export default router;

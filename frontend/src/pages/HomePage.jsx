@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, MapPin, Sparkles } from 'lucide-react';
 import { getDestinations } from '../features/places';
 import DestinationSearch from '../features/places/components/DestinationSearch';
-
-const heroImage = 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=2000&q=85';
+import CommonsPlaceImage from '../features/place-images/components/CommonsPlaceImage';
 
 export default function HomePage() {
   const [destinations, setDestinations] = useState([]);
@@ -16,17 +15,16 @@ export default function HomePage() {
       .catch(() => setDestinations([]));
   }, []);
 
-  const openDestination = (destination) => navigate(`/locations/${encodeURIComponent(destination.slug)}`);
+  const openDestination = (destination, googleDisplayName) => navigate(
+    `/locations/${encodeURIComponent(destination.slug)}`,
+    googleDisplayName ? { state: { googleDisplayName } } : undefined,
+  );
 
   return (
     <div className="pb-16">
       <section className="relative isolate mx-auto min-h-90 max-w-360 overflow-visible sm:rounded-b-lg">
-        <img
-          src={heroImage}
-          alt="Colorful coastal villages overlooking the Mediterranean"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-linear-to-r from-[#10261f]/85 via-[#10261f]/55 to-[#10261f]/10" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#17382d] via-[#42604b] to-[#9a6945]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-linear-to-r from-[#10261f]/70 via-[#10261f]/35 to-[#10261f]/10" />
         <div className="app-container relative flex min-h-90 items-center py-12">
           <div className="max-w-2xl text-white">
             <p className="mb-4 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-[#d5efad]">
@@ -74,7 +72,11 @@ export default function HomePage() {
                   className="group flex min-h-24 items-center justify-between gap-4 rounded-lg border border-[#e4eae5] bg-white p-4 text-left transition hover:border-[#87c4a0] hover:bg-[#f7fbf8]"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
+                    {destination.google_place_id ? (
+                      <CommonsPlaceImage placeId={destination.google_place_id} category="destination" destination={destination.name} name={destination.name} alt={destination.name} className="h-16 w-20 shrink-0" fallback={<MapPin size={19} />} />
+                    ) : (
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
+                    )}
                     <span className="min-w-0">
                       <span className="block truncate font-bold text-pine">{destination.name}</span>
                       <span className="mt-1 block text-sm text-[#68766e]">

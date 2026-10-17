@@ -10,7 +10,7 @@ export default function PlannerChatHistory({ conversations, activeConversationId
         </div>
         <span className="rounded-full bg-bg-subtle px-2 py-1 text-[10px] font-bold text-pine">{conversations.length}</span>
       </div>
-      <div className="max-h-[min(34dvh,280px)] overflow-y-auto p-2">
+      <div className="app-scrollbar max-h-[min(34dvh,280px)] overflow-y-auto p-2">
         {conversations.length ? conversations.map(conversation => {
           const active = conversation.id === activeConversationId;
           return (

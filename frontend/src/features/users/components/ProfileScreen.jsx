@@ -13,6 +13,9 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  CalendarDays,
+  ArrowRight,
+  Plane,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../auth';
@@ -23,6 +26,22 @@ import {
   suggestUsername,
   changePassword,
 } from '../api/profileApi';
+import { getTrips } from '../../trips/api/tripsApi';
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatTripDate(date) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export default function ProfileScreen() {
   const { user, isLoading: authLoading, logout, updateUser } = useAuth();
@@ -39,11 +58,15 @@ export default function ProfileScreen() {
     created_at: null,
     providers: { google: false, email: false },
   });
+  const [trips, setTrips] = useState([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
+  const [tripsError, setTripsError] = useState(false);
 
   const [activeTab, setActiveTab] = useState('details'); // 'details' | 'security' | 'danger'
   const [loadedUserId, setLoadedUserId] = useState(null);
   const loading = authLoading || Boolean(user?.id && loadedUserId !== user.id);
   const [saving, setSaving] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [generatingUsername, setGeneratingUsername] = useState(false);
   const [copiedHandle, setCopiedHandle] = useState(false);
 
@@ -51,7 +74,6 @@ export default function ProfileScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
 
   // Password change states
   const [currentPassword, setCurrentPassword] = useState('');
@@ -78,7 +100,6 @@ export default function ProfileScreen() {
         setName(data.name || '');
         setEmail(data.email || '');
         setUsername(data.username || '');
-        setAvatarUrl(data.avatar_url || '');
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -91,6 +112,21 @@ export default function ProfileScreen() {
     return () => {
       isMounted = false;
     };
+  }, [authLoading, user?.id]);
+
+  useEffect(() => {
+    if (authLoading || !user?.id) return undefined;
+    let isMounted = true;
+    setTripsLoading(true);
+    getTrips()
+      .then((data) => {
+        if (!isMounted) return;
+        setTrips(data);
+        setTripsError(false);
+      })
+      .catch(() => { if (isMounted) setTripsError(true); })
+      .finally(() => { if (isMounted) setTripsLoading(false); });
+    return () => { isMounted = false; };
   }, [authLoading, user?.id]);
 
   const handleCopyHandle = () => {
@@ -128,14 +164,12 @@ export default function ProfileScreen() {
       const res = await updateProfile(user.id, {
         name: name.trim(),
         username: username.trim() || null,
-        avatarUrl: avatarUrl.trim() || null,
       });
 
       const updatedUser = res.user || {
         ...profile,
         name: name.trim(),
         username: username.trim(),
-        avatar_url: avatarUrl.trim() || null,
       };
 
       setProfile((prev) => ({ ...prev, ...updatedUser }));
@@ -143,10 +177,10 @@ export default function ProfileScreen() {
         updateUser({
           name: updatedUser.name,
           username: updatedUser.username,
-          avatarUrl: updatedUser.avatar_url,
         });
       }
 
+      setEditingProfile(false);
       toast.success('Profile updated successfully!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update profile.');
@@ -241,19 +275,24 @@ export default function ProfileScreen() {
   }
 
   const initials = profile.name?.trim()?.[0]?.toUpperCase() || user.name?.[0]?.toUpperCase() || '✈️';
+  const todayKey = getLocalDateKey();
+  const upcomingTrip = trips.find((trip) => trip.end_date >= todayKey);
+  const tripInProgress = Boolean(upcomingTrip && upcomingTrip.start_date <= todayKey);
+  const pastTripCount = trips.filter((trip) => trip.end_date < todayKey).length;
+  const destinationCount = new Set(trips.map((trip) => trip.destination_name).filter(Boolean)).size;
 
   return (
-    <div className="w-full bg-[#f8f9fa] min-h-[calc(100vh-72px)] py-8 sm:py-10">
-      <div className="w-full max-w-[80rem] mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="w-full min-h-[calc(100vh-72px)] bg-[#f6f8f6] py-5 sm:py-8 lg:py-10">
+      <div className="mx-auto w-full max-w-[80rem] px-4 sm:px-6 lg:px-8">
         
         {/* ── Page Header (Simple TripAdvisor / Wanderlog style) ──────── */}
-        <div className="border-b border-[#e5eae6] pb-6 mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
+        <div className="mb-6 border-b border-[#e5eae6] pb-5 sm:mb-8 sm:pb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">
                 Account Settings
               </p>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
+              <h1 className="text-2xl font-extrabold tracking-tight text-pine sm:text-3xl">
                 Profile & Preferences
               </h1>
               <p className="text-sm text-[#66736b] mt-1">
@@ -262,19 +301,19 @@ export default function ProfileScreen() {
             </div>
 
             {/* Quick Profile Pill */}
-            <div className="flex items-center gap-3 bg-white border border-[#e2e8e3] rounded-2xl p-2.5 sm:px-4 shadow-2xs self-start sm:self-auto">
-              <div className="h-10 w-10 rounded-full overflow-hidden bg-[#FAF1ED] border border-[#d6dfd8] grid place-items-center text-pine font-bold text-base shrink-0">
+            <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-[#e2e8e3] bg-white p-3 shadow-[0_8px_24px_rgba(24,49,37,0.06)] sm:w-auto sm:max-w-full sm:p-3.5">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-[#d6dfd8] bg-[#FAF1ED] text-base font-bold text-pine ring-4 ring-[#f5f8f5]">
                 {profile.avatar_url ? (
                   <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
                 ) : (
                   initials
                 )}
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-pine truncate leading-tight">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold leading-tight text-pine sm:text-[15px]">
                   {profile.name || user.name}
                 </p>
-                <p className="text-xs font-mono text-emerald-800 font-semibold truncate">
+                <p className="mt-1 truncate text-xs font-mono font-medium text-[#66736b]">
                   @{profile.username || 'wanderer'}
                 </p>
               </div>
@@ -282,11 +321,11 @@ export default function ProfileScreen() {
           </div>
 
           {/* ── Horizontal Navigation Tabs (Always Visible, Mobile-Friendly) ── */}
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
             <button
               type="button"
               onClick={() => setActiveTab('details')}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors cursor-pointer ${
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-colors cursor-pointer sm:rounded-full sm:px-4 ${
                 activeTab === 'details'
                   ? 'bg-[#003924] text-white shadow-xs'
                   : 'bg-white text-[#526158] hover:bg-[#f2f5f2] border border-[#e2e8e3]'
@@ -299,7 +338,7 @@ export default function ProfileScreen() {
             <button
               type="button"
               onClick={() => setActiveTab('security')}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors cursor-pointer ${
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-colors cursor-pointer sm:rounded-full sm:px-4 ${
                 activeTab === 'security'
                   ? 'bg-[#003924] text-white shadow-xs'
                   : 'bg-white text-[#526158] hover:bg-[#f2f5f2] border border-[#e2e8e3]'
@@ -312,7 +351,7 @@ export default function ProfileScreen() {
             <button
               type="button"
               onClick={() => setActiveTab('danger')}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors cursor-pointer ${
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-colors cursor-pointer sm:rounded-full sm:px-4 ${
                 activeTab === 'danger'
                   ? 'bg-red-700 text-white shadow-xs'
                   : 'bg-white text-red-700 hover:bg-red-50 border border-red-200'
@@ -324,23 +363,104 @@ export default function ProfileScreen() {
           </div>
         </div>
 
+        {activeTab === 'details' && <section aria-labelledby="travel-snapshot-heading" className="mx-auto mb-6 grid w-full max-w-4xl gap-3 sm:mb-8 sm:gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            {[
+              { label: 'Total trips', value: trips.length },
+              { label: 'Destinations', value: destinationCount },
+              { label: 'Past trips', value: pastTripCount },
+            ].map((stat) => (
+              <div key={stat.label} className="flex min-h-[5.5rem] min-w-0 flex-col justify-center rounded-2xl border border-[#e2e8e3] bg-white px-2.5 py-3 shadow-sm sm:min-h-28 sm:px-5 sm:py-5">
+                <span className="text-2xl font-extrabold tracking-tight text-pine sm:text-3xl">
+                  {tripsLoading ? <span className="inline-block h-7 w-8 animate-pulse rounded bg-[#edf2ee] align-middle sm:h-8" /> : tripsError ? '—' : stat.value}
+                </span>
+                <span className="mt-1 text-[10px] font-semibold leading-tight text-[#66736b] min-[360px]:text-[11px] sm:text-sm">{stat.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="relative isolate flex min-h-40 min-w-0 flex-col justify-between overflow-hidden rounded-2xl bg-[#073d2d] p-4 text-white shadow-sm sm:min-h-44 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-16 -z-10 h-52 w-52 rounded-full bg-emerald-400/15 blur-2xl" />
+            <div className="min-w-0 flex-1">
+              <h2 id="travel-snapshot-heading" className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">
+                <Plane size={14} /> {tripInProgress ? 'Your current trip' : 'Your next trip'}
+              </h2>
+              {tripsLoading ? (
+                <div className="mt-3 h-6 w-48 animate-pulse rounded bg-white/15" aria-label="Loading trips" />
+              ) : tripsError ? (
+                <>
+                  <p className="mt-2 text-lg font-extrabold sm:text-xl">Your trip plans aren’t available</p>
+                  <p className="mt-1 text-xs text-emerald-50/85 sm:text-sm">Open My Trips to try loading them again.</p>
+                </>
+              ) : upcomingTrip ? (
+                <>
+                  <p className="mt-2 truncate text-xl font-extrabold sm:text-2xl">{upcomingTrip.destination_name || upcomingTrip.title}</p>
+                  {upcomingTrip.destination_name && upcomingTrip.title && upcomingTrip.title !== upcomingTrip.destination_name && (
+                    <p className="mt-0.5 truncate text-xs text-emerald-100/80">Trip: {upcomingTrip.title}</p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-emerald-50/90 sm:text-sm">
+                    <span className="inline-flex items-center gap-1.5"><CalendarDays size={14} aria-hidden="true" />{formatTripDate(upcomingTrip.start_date)}{upcomingTrip.end_date !== upcomingTrip.start_date && ` – ${formatTripDate(upcomingTrip.end_date)}`}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-lg font-extrabold sm:text-xl">Your next trip starts here</p>
+                  <p className="mt-1 text-xs text-emerald-50/85 sm:text-sm">Choose a destination and turn it into a day-by-day plan.</p>
+                </>
+              )}
+            </div>
+            <div className="mt-4 flex w-full shrink-0 flex-col gap-2 sm:mt-0 sm:w-auto sm:flex-row">
+              <Link
+                to={upcomingTrip ? `/trips/${upcomingTrip.id}` : '/trips'}
+                state={upcomingTrip ? { fromProfile: true } : undefined}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#073d2d] transition hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:w-auto"
+              >
+                {upcomingTrip ? 'Open itinerary' : tripsError ? 'View my trips' : 'Plan a trip'} <ArrowRight size={15} />
+              </Link>
+              <Link
+                to="/trips"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/40 px-4 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:w-auto"
+              >
+                View all trips
+              </Link>
+            </div>
+          </div>
+        </section>}
+
         {/* ── TAB 1: Personal Details ─────────────────────────────────── */}
         {activeTab === 'details' && (
-          <div className="bg-white rounded-2xl border border-[#e2e8e3] p-6 sm:p-8 shadow-xs max-w-3xl">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl border border-[#e2e8e3] bg-white p-4 shadow-sm sm:p-6 lg:p-8">
             <div className="border-b border-[#eef2ef] pb-4 mb-6">
-              <h2 className="text-lg font-bold text-pine">Personal Information</h2>
-              <p className="text-xs text-[#66736b] mt-0.5">
-                Update your display name and unique travel handle.
-              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-pine">Personal Information</h2>
+                  <p className="text-xs text-[#66736b] mt-0.5">
+                    Update your display name and unique travel handle.
+                  </p>
+                </div>
+                {!editingProfile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setName(profile.name || '');
+                      setUsername(profile.username || '');
+                      setEditingProfile(true);
+                    }}
+                    className="h-9 shrink-0 rounded-full border border-[#cbe5cf] bg-[#eef7f0] px-4 text-sm font-bold text-[#003924] hover:bg-[#e0f2e3]"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-6">
+            <form onSubmit={handleSaveProfile} className="grid gap-x-6 gap-y-5 sm:grid-cols-2 sm:gap-y-6">
               {/* Display Name */}
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm font-bold text-pine mb-1.5">
                   Full Name / Display Name
                 </label>
-                <input
+                {editingProfile ? <input
                   type="text"
                   required
                   maxLength={100}
@@ -348,16 +468,16 @@ export default function ProfileScreen() {
                   onChange={(e) => setName(e.target.value)}
                   className="h-11 w-full rounded-xl border border-[#d6dfd8] bg-white px-3.5 text-sm font-medium text-pine outline-none transition focus:border-[#00d050] focus:ring-2 focus:ring-[#00d050]/20"
                   placeholder="e.g. Jordan Rivera"
-                />
+                /> : <p className="min-h-11 rounded-xl border border-[#e2e8e3] bg-[#f8f9fa] px-3.5 py-3 text-sm font-medium text-pine">{profile.name || 'Not set'}</p>}
               </div>
 
               {/* Unique Travel Username / Handle */}
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <label className="block text-sm font-bold text-pine">
                     Travel Username / Handle
                   </label>
-                  <button
+                  {editingProfile && <button
                     type="button"
                     disabled={generatingUsername}
                     onClick={handleSuggestUsername}
@@ -366,14 +486,14 @@ export default function ProfileScreen() {
                   >
                     <Dices size={13} className={generatingUsername ? 'animate-spin' : ''} />
                     <span>{generatingUsername ? 'Rolling…' : 'Suggest random handle'}</span>
-                  </button>
+                  </button>}
                 </div>
 
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm font-bold text-[#66736b]">
                     @
                   </span>
-                  <input
+                  {editingProfile ? <input
                     type="text"
                     required
                     minLength={3}
@@ -382,15 +502,15 @@ export default function ProfileScreen() {
                     onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
                     className="h-11 w-full rounded-xl border border-[#d6dfd8] bg-white pl-8 pr-10 font-mono text-sm font-semibold text-pine outline-none transition focus:border-[#00d050] focus:ring-2 focus:ring-[#00d050]/20"
                     placeholder="NomadExplorer42"
-                  />
-                  <button
+                  /> : <p className="min-h-11 rounded-xl border border-[#e2e8e3] bg-[#f8f9fa] py-3 pl-8 pr-3 font-mono text-sm font-semibold text-[#66736b]">@{profile.username || 'wanderer'}</p>}
+                  {editingProfile && <button
                     type="button"
                     onClick={handleCopyHandle}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66736b] hover:text-pine cursor-pointer"
                     title="Copy handle"
                   >
                     {copiedHandle ? <Check size={16} className="text-[#00d050]" /> : <Copy size={16} />}
-                  </button>
+                  </button>}
                 </div>
                 <p className="mt-1.5 text-xs text-[#66736b]">
                   Unique handle for your profile. You can also use this username to log into your account!
@@ -398,7 +518,7 @@ export default function ProfileScreen() {
               </div>
 
               {/* Email Address — DISABLED / READ-ONLY */}
-              <div>
+              <div className="min-w-0 sm:col-span-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-sm font-bold text-pine">
                     Email Address
@@ -407,66 +527,41 @@ export default function ProfileScreen() {
                     Non-editable
                   </span>
                 </div>
-                <input
-                  type="email"
-                  disabled
-                  readOnly
-                  value={email}
-                  className="h-11 w-full rounded-xl border border-[#e2e8e3] bg-[#f2f4f2] px-3.5 text-sm font-medium text-[#66736b] cursor-not-allowed outline-none select-all"
-                  title="Email cannot be modified"
-                />
+                <p className="min-h-11 rounded-xl border border-[#e2e8e3] bg-[#f8f9fa] px-3.5 py-3 text-sm font-medium text-[#66736b]">{profile.email || email}</p>
                 <p className="mt-1.5 text-xs text-[#85948a]">
                   Email address is linked to your account and cannot be modified.
                 </p>
               </div>
 
-              {/* Profile Image URL */}
-              <div>
-                <label className="block text-sm font-bold text-pine mb-1.5">
-                  Profile Picture URL
-                </label>
-                <input
-                  type="url"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://example.com/avatar.jpg"
-                  className="h-11 w-full rounded-xl border border-[#d6dfd8] bg-white px-3.5 text-sm font-medium text-pine outline-none transition focus:border-[#00d050] focus:ring-2 focus:ring-[#00d050]/20"
-                />
-                <p className="mt-1.5 text-xs text-[#66736b]">
-                  Enter a public URL for your profile avatar.
-                </p>
-              </div>
-
-              {/* Action Buttons: Button #00eb5b / Hover #00d050 */}
-              <div className="flex flex-wrap items-center justify-end gap-3 pt-5 border-t border-[#eef2ef]">
+              {editingProfile && <div className="flex flex-col-reverse gap-2 border-t border-[#eef2ef] pt-4 sm:col-span-2 sm:flex-row sm:justify-end sm:gap-3 sm:pt-5">
                 <button
                   type="button"
                   onClick={() => {
                     setName(profile.name || '');
                     setUsername(profile.username || '');
-                    setAvatarUrl(profile.avatar_url || '');
+                    setEditingProfile(false);
                   }}
-                  className="h-10 px-5 rounded-full text-sm font-bold text-[#526158] hover:bg-[#f2f5f2] transition-colors cursor-pointer"
+                  className="min-h-11 rounded-full px-5 text-sm font-bold text-[#526158] transition-colors hover:bg-[#f2f5f2] cursor-pointer"
                 >
                   Discard
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="h-11 px-7 rounded-full bg-[#00eb5b] hover:bg-[#00d050] text-[#003924] font-bold text-sm shadow-sm transition-colors cursor-pointer disabled:opacity-60"
+                  className="min-h-11 rounded-full bg-[#00eb5b] px-7 text-sm font-bold text-[#003924] shadow-sm transition-colors hover:bg-[#00d050] cursor-pointer disabled:opacity-60"
                 >
                   {saving ? 'Saving changes…' : 'Save Changes'}
                 </button>
-              </div>
+              </div>}
             </form>
           </div>
         )}
 
         {/* ── TAB 2: Sign-in & Security ───────────────────────────────── */}
         {activeTab === 'security' && (
-          <div className="space-y-6 max-w-3xl">
+          <div className="mx-auto w-full max-w-4xl space-y-4 sm:space-y-6">
             {/* Connected Sign-In Methods */}
-            <div className="bg-white rounded-2xl border border-[#e2e8e3] p-6 sm:p-8 shadow-xs">
+            <div className="rounded-2xl border border-[#e2e8e3] bg-white p-4 shadow-sm sm:p-6 lg:p-8">
               <div className="border-b border-[#eef2ef] pb-4 mb-5">
                 <h2 className="text-lg font-bold text-pine">Connected Sign-in Methods</h2>
                 <p className="text-xs text-[#66736b] mt-0.5">
@@ -474,9 +569,9 @@ export default function ProfileScreen() {
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {/* Google card */}
-                <div className="p-4 rounded-xl border border-[#e2e8e3] bg-[#fafcfa] flex items-center justify-between">
+                <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e2e8e3] bg-[#fafcfa] p-3 sm:p-4">
                   <div className="flex items-center gap-3">
                     <div className="grid h-10 w-10 place-items-center rounded-xl bg-white shadow-2xs border border-gray-100">
                       <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -486,7 +581,7 @@ export default function ProfileScreen() {
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-bold text-pine">Google Sign-in</p>
                       <p className="text-xs text-[#66736b]">OAuth provider</p>
                     </div>
@@ -501,12 +596,12 @@ export default function ProfileScreen() {
                 </div>
 
                 {/* Password card */}
-                <div className="p-4 rounded-xl border border-[#e2e8e3] bg-[#fafcfa] flex items-center justify-between">
+                <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e2e8e3] bg-[#fafcfa] p-3 sm:p-4">
                   <div className="flex items-center gap-3">
                     <div className="grid h-10 w-10 place-items-center rounded-xl bg-white shadow-2xs border border-gray-100 text-pine">
                       <Lock size={18} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-bold text-pine">Password Login</p>
                       <p className="text-xs text-[#66736b]">Email or handle</p>
                     </div>
@@ -525,7 +620,7 @@ export default function ProfileScreen() {
             </div>
 
             {/* Set / Change Password */}
-            <div className="bg-white rounded-2xl border border-[#e2e8e3] p-6 sm:p-8 shadow-xs">
+            <div className="rounded-2xl border border-[#e2e8e3] bg-white p-4 shadow-sm sm:p-6 lg:p-8">
               <div className="border-b border-[#eef2ef] pb-4 mb-5">
                 <h2 className="text-lg font-bold text-pine">
                   {profile.providers?.email ? 'Change Password' : 'Create a Password'}
@@ -537,7 +632,7 @@ export default function ProfileScreen() {
                 </p>
               </div>
 
-              <form onSubmit={handleChangePassword} className="space-y-5">
+              <form onSubmit={handleChangePassword} className="max-w-2xl space-y-5">
                 {profile.providers?.email && (
                   <div>
                     <label className="block text-sm font-bold text-pine mb-1.5">
@@ -622,24 +717,24 @@ export default function ProfileScreen() {
 
         {/* ── TAB 3: Delete Account ───────────────────────────────────── */}
         {activeTab === 'danger' && (
-          <div className="bg-white rounded-2xl border border-red-200 p-6 sm:p-8 shadow-xs max-w-3xl">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl border border-red-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
             <div className="flex items-center gap-3 border-b border-red-100 pb-4 mb-5">
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-100 text-red-700 shrink-0">
                 <AlertTriangle size={20} />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-red-950">Danger Zone</h2>
+                <h2 className="text-lg font-bold text-red-950">Delete Account</h2>
                 <p className="text-xs text-red-600">
-                  Permanently remove your account and all associated data.
+                  Permanently delete your account and its data.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 p-5 rounded-xl border border-red-200 bg-red-50/40">
+            <div className="flex flex-col gap-4 rounded-xl border border-red-200 bg-red-50/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:p-5">
               <div>
-                <h3 className="text-sm font-bold text-red-950">Delete Entire Account</h3>
+                <h3 className="text-sm font-bold text-red-950">Delete your account</h3>
                 <p className="text-xs text-red-800 mt-1 max-w-xl leading-relaxed">
-                  Once deleted, your account cannot be recovered. All saved trips, itineraries, preferences, and login credentials will be erased immediately.
+                  This action is permanent. Your profile, saved trips, itineraries, preferences, and sign-in credentials will be deleted and can’t be recovered.
                 </p>
               </div>
 
@@ -649,7 +744,7 @@ export default function ProfileScreen() {
                   setDeleteConfirmationInput('');
                   setShowDeleteModal(true);
                 }}
-                className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs tracking-wide shadow-2xs transition-colors cursor-pointer shrink-0"
+                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-red-600 px-5 text-xs font-bold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 cursor-pointer sm:w-auto"
               >
                 <Trash2 size={14} />
                 <span>Delete Account</span>
@@ -662,7 +757,7 @@ export default function ProfileScreen() {
       {/* ── Delete Confirmation Modal ─────────────────────────────────── */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-2xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 sm:p-7 shadow-2xl border border-red-100">
+          <div className="app-scrollbar max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-red-100 bg-white p-4 shadow-2xl sm:p-6">
             <div className="flex items-center gap-3 text-red-600 mb-3">
               <div className="grid h-10 w-10 place-items-center rounded-full bg-red-100 shrink-0">
                 <AlertCircle size={22} />
@@ -687,7 +782,7 @@ export default function ProfileScreen() {
               />
             </div>
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
               <button
                 type="button"
                 disabled={isDeleting}

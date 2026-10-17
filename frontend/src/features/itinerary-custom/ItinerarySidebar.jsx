@@ -1,17 +1,17 @@
 import { useState } from 'react';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { ArrowLeftRight, LoaderCircle, MapPin, Route, Trash2, Undo2 } from 'lucide-react';
 import { PlaceSearch } from '../places';
+import WorkspaceRailControls from '../../shared/components/workspace-rail/WorkspaceRailControls';
 
 function ItinerarySidebar({ 
   workspaceClassName = '',
+  backTo = '/trips', backLabel = 'Back to my trips',
   showList, isLandscape, isItineraryExpanded, setIsItineraryExpanded, 
   items, dayCount, destinationSlug, onAddPlace, addingPlace,
   onOptimizeDay, optimizingDay, optimizationMessage,
   setMapCenter, setMapZoom, setSelectedItem, setMobileView, selectedDay, onSelectDay,
   onUpdateItem, onMoveItem, onRemoveItem, removedItem, onUndoRemove, onReplaceItem
 }) {
-  const placesLibrary = useMapsLibrary('places');
   const [replacingItemId, setReplacingItemId] = useState('');
   const [timeDrafts, setTimeDrafts] = useState({});
   const dayItems = items.filter(item => Number(item.day_index ?? 0) === selectedDay);
@@ -23,54 +23,20 @@ function ItinerarySidebar({
     setMapZoom(16);
     if (!isLandscape) setMobileView('map');
 
-    // On-demand places lookup logic
-    const googlePlaceId = item.google_place_id || item.placeId;
-    if (googlePlaceId && placesLibrary) {
-      const service = new placesLibrary.PlacesService(document.createElement('div'));
-      service.getDetails(
-        {
-          placeId: googlePlaceId,
-          fields: ['name', 'formatted_address', 'wheelchair_accessible_entrance', 'editorial_summary', 'reviews', 'photos', 'opening_hours']
-        },
-        (place, status) => {
-          if (status === placesLibrary.PlacesServiceStatus.OK && place) {
-            setSelectedItem({
-              ...item,
-              title: place.name || item.title,
-              address: place.formatted_address,
-              accessible: place.wheelchair_accessible_entrance ? 'Accessible entrance' : null,
-              about: place.editorial_summary?.overview,
-              isOpen: place.opening_hours?.isOpen(),
-              photoUrl: place.photos?.[0]?.getUrl({ maxWidth: 400 }) || null,
-              reviews: place.reviews ? place.reviews.slice(0, 2) : []
-            });
-          } else {
-            setSelectedItem(item);
-          }
-        }
-      );
-    } else {
-      setSelectedItem(item);
-    }
+    // The itinerary item already has its user-visible title and coordinates.
+    // Opening it on the map should not trigger another billable Places Details call.
+    setSelectedItem(item);
   };
 
   return (
-    <div className={`h-full min-h-0 min-w-0 overflow-y-auto p-6 flex flex-col justify-between transition-all duration-300 ease-in-out relative rounded-lg border border-slate-200 ${workspaceClassName}
+    <div className={`min-h-full min-w-0 overflow-visible flex flex-col justify-between transition-all duration-300 ease-in-out relative rounded-lg border border-slate-200 ${workspaceClassName}
       ${showList ? 'flex' : 'hidden'}
-      ${isLandscape ? (isItineraryExpanded ? 'w-full' : 'w-16') : 'w-full'}`}
+      ${isLandscape ? (isItineraryExpanded ? 'w-full min-h-[calc(100dvh-1rem)] p-6' : 'w-16 min-h-[calc(100dvh-1rem)] bg-white text-pine shadow-sm p-0') : 'w-full p-6'}`}
     >
       {isItineraryExpanded || !isLandscape ? (
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-pine">Edit Your Itinerary</h2>
-            {isLandscape && (
-              <button
-                onClick={() => setIsItineraryExpanded(false)}
-                className="px-3 py-1.5 text-xs font-semibold bg-slate-200 text-pine hover:bg-slate-300 rounded-lg transition"
-              >
-                Collapse List 📑
-              </button>
-            )}
           </div>
           <p className="text-sm text-slate-500 mb-6">Plan your trip layout and track stops seamlessly.</p>
 
@@ -138,9 +104,7 @@ function ItinerarySidebar({
           )}
         </div>
       ) : (
-        <div onClick={() => setIsItineraryExpanded(true)} className="absolute inset-0 bg-slate-900/5 cursor-pointer flex items-center justify-center hover:bg-slate-900/10 transition">
-          <span className="transform -rotate-90 whitespace-nowrap tracking-wider font-bold text-slate-600 text-xs">EXPAND ITINERARY</span>
-        </div>
+        <WorkspaceRailControls backTo={backTo} backLabel={backLabel} expandLabel="Expand Itinerary" onExpand={() => setIsItineraryExpanded(true)} className="min-h-[calc(100dvh-1rem)]" />
       )}
 
       {(isItineraryExpanded || !isLandscape) && (

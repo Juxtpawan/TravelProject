@@ -5,7 +5,7 @@ import { generateJson } from '../services/gemini.service.js';
 import { canGenerateTrip, createEmptyBrief } from '../services/itinerary-ai/brief.js';
 import { runIntakeTurn } from '../services/itinerary-ai/intake.graph.js';
 import { createItineraryRevision } from '../services/itinerary-ai/revision.service.js';
-import { fetchGoogleRouteMatrix, optimizeStopOrder } from '../services/itinerary-ai/route-optimizer.js';
+import { optimizeStopOrder } from '../services/itinerary-ai/route-optimizer.js';
 
 const router = express.Router();
 const INITIAL_MESSAGE = "Hi, I'm your trip planner. Where would you like to go? If you are not sure yet, tell me what kind of trip sounds good.";
@@ -419,10 +419,9 @@ Return a JSON array with 2-4 stops per day using exactly these fields:
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
       const dayItems = itineraryItems.filter(item => item.day_index === dayIndex);
       if (dayItems.length < 2) continue;
-      const hasCoordinates = dayItems.every(item => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude)));
-      const matrixItems = dayItems.map(item => ({ ...item, lat: item.latitude, lng: item.longitude }));
-      const matrix = hasCoordinates ? await fetchGoogleRouteMatrix(matrixItems, req.cloudflare?.env) : null;
-      const optimized = optimizeStopOrder(dayItems, matrix);
+      // AI itinerary generation uses local coordinate ordering. Google Routes
+      // is reserved for the explicit “Optimize day” action in the trip editor.
+      const optimized = optimizeStopOrder(dayItems, null);
       routeSources.add(optimized.source);
       const replacements = new Map(optimized.items.map(item => [item.id, item]));
       for (let index = 0; index < itineraryItems.length; index += 1) {

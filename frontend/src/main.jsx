@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './app/app.jsx';
 import './index.css';
+import './shared/components/scrollable-pane/scrollable-pane.css';
 import { StrictMode } from 'react';
 import { AppProviders } from './app/providers.jsx';
 

@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, MapPin, Search } from 'lucide-react';
 import { autocompleteDestinations, getDestinationPlaceDetails, lookupDestination, resolveDestination, startDestinationDiscovery } from '../api/placesApi';
 
+function getPredictionLabel(prediction, fallback = '') {
+  const structuredLabel = [prediction.mainText, prediction.secondaryText]
+    .filter(Boolean)
+    .join(', ');
+  const description = prediction.description?.trim() || '';
+  return structuredLabel.length >= description.length
+    ? structuredLabel || fallback
+    : description;
+}
+
 /** Show Google Places Autocomplete predictions as the user types. */
 export default function DestinationSearch({ onSearch }) {
   const [query, setQuery] = useState('');
@@ -13,12 +23,15 @@ export default function DestinationSearch({ onSearch }) {
   const searchQuery = useRef('');
   const input = query.trim();
   const suggestions = suggestionState.query === input ? suggestionState.items : [];
-  const autocompleteLoading = input.length >= 2 && !selected
+  const autocompleteLoading = input.length >= 3 && !selected
     && (suggestionState.query !== input || suggestionState.status === 'loading');
   const autocompleteFailed = suggestionState.query === input && suggestionState.status === 'failed';
 
   useEffect(() => {
-    if (input.length < 2 || selected) return undefined;
+    if (input.length < 3 || selected) {
+      if (input.length < 3) sessionToken.current = null;
+      return undefined;
+    }
 
     let active = true;
     const timer = setTimeout(async () => {
@@ -34,7 +47,7 @@ export default function DestinationSearch({ onSearch }) {
           setError(requestError.response?.data?.error || 'Google destination suggestions could not be loaded.');
         }
       }
-    }, 250);
+    }, 500);
 
     return () => {
       active = false;
@@ -42,44 +55,57 @@ export default function DestinationSearch({ onSearch }) {
     };
   }, [input, selected]);
 
-  const openSavedDestination = (destination) => {
-    onSearch?.(destination);
+  const openSavedDestination = (destination, googleDisplayName = '') => {
+    onSearch?.(destination, googleDisplayName);
     startDestinationDiscovery(destination.slug).catch(() => {});
+  };
+
+  const chooseSuggestion = async (prediction) => {
+    const selectedLabel = getPredictionLabel(prediction, input);
+    setQuery(selectedLabel);
+    setSelected(prediction);
+    setLoading(true);
+    setError('');
+
+    const token = sessionToken.current;
+    sessionToken.current = null;
+    try {
+      const place = await getDestinationPlaceDetails(prediction.placeId, token);
+      const destination = await resolveDestination(
+        searchQuery.current || input,
+        place.placeId || prediction.placeId,
+        place.location || undefined
+      );
+      openSavedDestination(destination, selectedLabel);
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || 'Search could not be completed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    if (query.trim().length < 2 || loading) return;
+    if (query.trim().length < 2 || loading || selected) return;
     setLoading(true);
     setError('');
 
     try {
-      if (!selected) {
-        const cached = await lookupDestination(query.trim());
-        if (cached.destination) {
-          openSavedDestination(cached.destination);
-          return;
-        }
-
-        if (autocompleteLoading) {
-          setError('Searching for destinations… choose a suggestion when it appears.');
-        } else if (suggestions.length) {
-          setError('Choose a destination from the suggestions.');
-        } else if (autocompleteFailed) {
-          setError('No saved destinations match, and Google suggestions could not load. Check your connection and Maps API key settings.');
-        } else {
-          setError('No matching destination found. Try a city, region, state, or country.');
-        }
+      const cached = await lookupDestination(query.trim());
+      if (cached.destination) {
+        openSavedDestination(cached.destination);
         return;
       }
 
-      // Resolve the prediction and complete its Google session through the API.
-      const token = sessionToken.current;
-      sessionToken.current = null;
-      const place = await getDestinationPlaceDetails(selected.placeId, token);
-      const destination = await resolveDestination(searchQuery.current || query.trim(), place.placeId || selected.placeId, place.location || undefined);
-      onSearch?.(destination);
-      startDestinationDiscovery(destination.slug).catch(() => {});
+      if (autocompleteLoading) {
+        setError('Searching for destinations… choose a suggestion when it appears.');
+      } else if (suggestions.length) {
+        setError('Choose a destination from the suggestions.');
+      } else if (autocompleteFailed) {
+        setError('No saved destinations match, and Google suggestions could not load. Check your connection and Maps API key settings.');
+      } else {
+        setError('No matching destination found. Try a city, region, state, or country.');
+      }
     } catch {
       setError('Search could not be completed. Please try again.');
     } finally {
@@ -97,7 +123,7 @@ export default function DestinationSearch({ onSearch }) {
     }
   };
 
-  const showDropdown = query.trim().length >= 2 && !selected;
+  const showDropdown = query.trim().length >= 3 && !selected;
   const hasSuggestions = suggestions.length > 0;
 
   return (
@@ -124,22 +150,21 @@ export default function DestinationSearch({ onSearch }) {
         {loading ? 'Searching…' : <><Search size={16} /> Search</>}
       </button>
 
-      {showDropdown && <ul className="absolute left-0 right-28 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)]" role="listbox">
+      {showDropdown && <ul className="app-scrollbar absolute left-0 right-28 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)]" role="listbox">
         {suggestions.map((prediction) => (
           <li key={prediction.placeId}>
-          <button type="button" onClick={() => { setSelected(prediction); setError(''); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-[#f5faf6]">
+          <button type="button" onClick={() => chooseSuggestion(prediction)} disabled={loading} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-[#f5faf6] disabled:cursor-wait disabled:opacity-70">
               <MapPin size={17} className="shrink-0 text-pine" />
-              <span className="min-w-0 flex-1 truncate">{prediction.description || prediction.mainText || ''}</span>
+              <span className="min-w-0 flex-1 truncate">{getPredictionLabel(prediction)}</span>
             </button>
           </li>
         ))}
         {!hasSuggestions && <li className="px-4 py-3 text-sm text-[#68766e]">
           {autocompleteLoading ? 'Searching Google destinations…' : autocompleteFailed ? 'Google suggestions are unavailable. Check your connection and Places API settings.' : 'No Google suggestions yet. Keep typing or try another spelling.'}
         </li>}
-        {hasSuggestions && <li className="border-t border-[#edf1ed] px-4 py-1.5 text-right text-[11px] font-semibold text-[#68766e]">Google Maps</li>}
+      {hasSuggestions && <li translate="no" className="border-t border-[#edf1ed] px-4 py-1.5 text-right text-xs font-normal text-[#5e5e5e]">Google Maps</li>}
       </ul>}
 
-      {selected && <p className="absolute left-3 right-28 top-full z-40 mt-2 rounded-lg border border-[#dce8df] bg-white px-4 py-3 text-sm text-[#34443a] shadow-sm">Selected: <strong>{selected.description || selected.mainText}</strong>. Click Search or press Enter to open.</p>}
       {error && <p role="alert" className="absolute left-3 right-28 top-full z-40 mt-2 rounded-lg bg-white px-4 py-3 text-sm text-[#9b3e32] shadow">{error}</p>}
     </form>
   );

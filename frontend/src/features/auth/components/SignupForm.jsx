@@ -27,6 +27,11 @@ function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {location.state?.notice && (
+        <div role="status" className="rounded-lg border border-[#dce5de] bg-[#f3f8f4] px-3 py-2.5 text-sm leading-5 text-pine">
+          {location.state.notice}
+        </div>
+      )}
       <div>
         <label className="block text-sm font-medium text-pine mb-1">Full name</label>
         <input

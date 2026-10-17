@@ -6,6 +6,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    // Keep hooks imported by map libraries on the same React instance as the app.
+    dedupe: ['react', 'react-dom'],
+  },
   server: {
     port: 5173,
     headers: {

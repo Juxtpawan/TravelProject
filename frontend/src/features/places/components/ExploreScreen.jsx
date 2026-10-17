@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Compass, MapPin, Sparkles } from 'lucide-react';
 import { getDestinations } from '../api/placesApi';
 import DestinationSearch from './DestinationSearch';
+import CommonsPlaceImage from '../../place-images/components/CommonsPlaceImage';
 
 export default function ExplorePage() {
   const [destinations, setDestinations] = useState([]);
@@ -52,7 +53,11 @@ export default function ExplorePage() {
             {destinations.map((destination) => (
               <button key={destination.id} type="button" onClick={() => openDestination(destination)} className="group flex min-h-24 items-center justify-between gap-3 border-b border-[#e8ede9] py-4 text-left">
                 <span className="flex min-w-0 items-center gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
+                  {destination.google_place_id ? (
+                    <CommonsPlaceImage placeId={destination.google_place_id} category="destination" destination={destination.name} name={destination.name} alt={destination.name} className="h-16 w-20 shrink-0" fallback={<MapPin size={19} />} />
+                  ) : (
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
+                  )}
                   <span className="min-w-0">
                     <span className="block truncate font-bold text-pine">{destination.name}</span>
                     <span className="mt-1 block text-sm text-[#718077]">{destination.places_count || 0} places{destination.country ? ` · ${destination.country}` : ''}</span>

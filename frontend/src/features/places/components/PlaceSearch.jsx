@@ -72,7 +72,7 @@ export default function SearchBar({ destinationSlug, onResultClick, inlineResult
       </div>
 
       {open && query.trim().length >= 2 && results.length > 0 && (
-        <div className={`${inlineResults ? 'relative mt-2' : 'absolute left-0 right-0 top-full z-50 mt-2'} max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white shadow-[0_14px_40px_rgba(18,44,32,0.16)]`}>
+        <div className={`app-scrollbar ${inlineResults ? 'relative mt-2' : 'absolute left-0 right-0 top-full z-50 mt-2'} max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white shadow-[0_14px_40px_rgba(18,44,32,0.16)]`}>
           {results.map(place => (
             <button
               key={place.id}

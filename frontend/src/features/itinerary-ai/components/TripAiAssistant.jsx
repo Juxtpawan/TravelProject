@@ -89,7 +89,7 @@ export default function TripAiAssistant({ tripId, onItineraryUpdated }) {
             </div>
             <button type="button" onClick={() => setIsOpen(false)} aria-label="Close assistant" className="ml-auto grid h-9 w-9 place-items-center rounded-full text-text-secondary hover:bg-gray"><X size={17} /></button>
           </header>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
+          <div className="app-scrollbar flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
             {isLoading && <p className="flex items-center gap-2 text-sm text-text-secondary"><LoaderCircle size={16} className="animate-spin" />Opening your trip conversation…</p>}
             {!isLoading && messages.slice(-24).map(message => (
               <article key={message.id} className={`flex gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>

@@ -9,7 +9,8 @@ export default function InteractiveMap({
     id = 'interactive-map',
     mapId,
     showMap = true, mapCenter, setMapCenter,
-    mapZoom, setMapZoom, children, userLocation, setUserLocation, overlayOpen = false
+    mapZoom, setMapZoom, children, userLocation, setUserLocation, overlayOpen = false,
+    gestureHandling = 'greedy'
 }) {
     const apiKey = ENV.GOOGLE_MAPS_KEY || '';
     const mapsStatus = useApiLoadingStatus();
@@ -78,13 +79,17 @@ export default function InteractiveMap({
                         <Map
                             id={id}
                             mapId={mapId || ENV.GOOGLE_MAP_ID}
-                            gestureHandling="greedy"
+                            gestureHandling={gestureHandling}
                             zoom={mapZoom}
                             center={mapCenter}
-                            onCenterChanged={(e) => setMapCenter(e.detail.center)}
-                            // 🟢 Sync manual pinch/scroll zoom back into state, so the
-                            // +/- buttons stay accurate after the user zooms by other means
-                            onZoomChanged={(e) => setMapZoom(e.detail.zoom)}
+                            // Keep the controlled camera in sync during mouse/touch drags
+                            // and wheel/pinch zooms, otherwise React can restore stale values.
+                            onCameraChanged={(e) => {
+                                setMapCenter(e.detail.center);
+                                setMapZoom(e.detail.zoom);
+                            }}
+                            draggableCursor="grab"
+                            draggingCursor="grabbing"
                             className="w-full h-full"
                             streetViewControl={false}
                             mapTypeControl={false}

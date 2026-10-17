@@ -242,7 +242,7 @@ export default function AiPlannerScreen() {
       {isHistoryOpen && (
         <div className="fixed inset-0 z-[60] flex justify-start bg-black/25 backdrop-blur-[1px]">
           <button type="button" aria-label="Close chat history" onClick={() => setIsHistoryOpen(false)} className="absolute inset-0 h-full w-full cursor-default" />
-          <aside role="dialog" aria-modal="true" aria-label="Private chat history" className="relative z-10 flex h-full w-[min(22rem,88vw)] flex-col gap-3 overflow-y-auto border-r border-gray bg-white p-4 shadow-xl">
+          <aside role="dialog" aria-modal="true" aria-label="Private chat history" className="app-scrollbar relative z-10 flex h-full w-[min(22rem,88vw)] flex-col gap-3 overflow-y-auto border-r border-gray bg-white p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-extrabold text-pine">Private chats</h2>
               <button type="button" onClick={() => setIsHistoryOpen(false)} aria-label="Close chat history" className="grid h-9 w-9 place-items-center rounded-full hover:bg-gray"><X size={18} /></button>
