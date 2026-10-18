@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ArrowRight, BedDouble, BookOpen, Compass, Heart, MapPin, PanelLeftClose, Utensils, Landmark, LoaderCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Compass, Heart, MapPin, PanelLeftClose, Utensils, Landmark, LoaderCircle, Sparkles } from 'lucide-react';
 import { getDestinationGuide, resolveDestination } from '../api/placesApi';
 import { searchGoogleGuidePlaces, storeGooglePlaceIds } from '../api/googlePlaces';
 import { createTrip } from '../../trips/api/tripsApi';
@@ -19,14 +19,12 @@ import PlaceDetailsPanel from './PlaceDetailsPanel';
 const categories = [
   { key: 'attraction', title: 'Places to visit', sectionTitle: 'Where to go', singular: 'place to visit', Icon: Landmark, color: 'var(--color-green-medium)', border: 'var(--color-pine)', types: ['tourist_attraction', 'museum', 'art_gallery', 'historical_landmark', 'park', 'zoo', 'aquarium', 'amusement_park', 'place_of_worship'] },
   { key: 'restaurant', title: 'Restaurants', sectionTitle: 'Where to eat', singular: 'restaurant', Icon: Utensils, color: '#e46432', border: '#b84620', types: ['restaurant'] },
-  { key: 'hotel', title: 'Hotels', sectionTitle: 'Where to stay', singular: 'hotel', Icon: BedDouble, color: '#3972c6', border: '#24549d', types: ['hotel'] },
 ];
 const EMPTY_ENTITIES = [];
 
 const normalizedCategory = (category = '') => {
   const value = category.toLowerCase();
   if (['restaurant', 'cafe', 'bar', 'eat', 'drink'].includes(value)) return 'restaurant';
-  if (['hotel', 'lodging', 'sleep'].includes(value)) return 'hotel';
   return 'attraction';
 };
 
@@ -80,7 +78,8 @@ export default function DestinationPage() {
   const [guideState, setGuideState] = useState({ slug: null, guide: null, error: '' });
   const [destinationDetails, setDestinationDetails] = useState(null);
   const [activeCategory, setActiveCategory] = useState('attraction');
-  const [requestedCategories, setRequestedCategories] = useState({ attraction: true });
+  const [requestedCategories, setRequestedCategories] = useState({ attraction: true, restaurant: true });
+  const [expandedCategories, setExpandedCategories] = useState({ attraction: false, restaurant: false });
   const [placesPanelExpanded, setPlacesPanelExpanded] = useState(true);
   const [googleResults, setGoogleResults] = useState({});
   const [categorySearchErrors, setCategorySearchErrors] = useState({});
@@ -178,7 +177,8 @@ export default function DestinationPage() {
         setCategorySearchErrors({});
         setSelectedId(null);
         setActiveCategory('attraction');
-        setRequestedCategories({ attraction: true });
+        setRequestedCategories({ attraction: true, restaurant: true });
+        setExpandedCategories({ attraction: false, restaurant: false });
         setShowWishlistOnly(false);
         setCrawlPollTick(0);
         const location = destinationCenter(result.destination);
@@ -426,7 +426,7 @@ export default function DestinationPage() {
               <DateRangePicker compact startDate={startDate} endDate={endDate} onStartChange={value => { setStartDate(value); setPlanError(''); }} onEndChange={value => { setEndDate(value); setPlanError(''); }} />
             </div>
             <button type="submit" disabled={creatingTrip || authLoading || sessionLoading}
-              className="group inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-full bg-gradient-to-r from-[#fff1c9] to-[#ffe4a3] px-3.5 text-xs font-extrabold text-[#34483f] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-pine disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:px-4">
+              className="group inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#24523b] to-pine px-4 text-xs font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:from-pine hover:to-[#17382d] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-pine disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:px-5">
               {creatingTrip ? <><LoaderCircle size={15} className="animate-spin" />Starting…</> : <>Plan trip<ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" /></>}
             </button>
           </form>
@@ -444,7 +444,7 @@ export default function DestinationPage() {
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e2efe4] text-pine shadow-sm"><Sparkles size={17} /></span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-extrabold tracking-tight text-pine sm:text-[15px]">Find your {destinationDetails?.name || destination.name} favorites</p>
-                <p className="truncate text-[11px] font-medium text-[#758279] sm:text-xs">Places to see, food to try, stays to save</p>
+                <p className="truncate text-[11px] font-medium text-[#758279] sm:text-xs">Places to see and food to try</p>
               </div>
               <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold text-[#66766b] ring-1 ring-[#e3ebe4] sm:text-[11px]">
                 {Object.values(categoryPlaces).reduce((total, places) => total + places.length, 0)} nearby
@@ -455,8 +455,9 @@ export default function DestinationPage() {
                 const count = getVisibleCategoryPlaces(key).length;
                 return <button key={key} type="button" onClick={() => {
                   setActiveCategory(key);
-                  setRequestedCategories((current) => current[key] ? current : { ...current, [key]: true });
                   setShowWishlistOnly(false);
+                  const el = document.getElementById(`guide-section-${key}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }} aria-pressed={activeCategory === key}
                   className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${activeCategory === key ? 'border-green-medium bg-badge-bg text-pine' : 'border-[#e0e7e1] bg-white text-[#59675e] hover:bg-[#f7faf7]'}`}>
                   <Icon size={15} style={{ color }} />{title}<span className="text-[10px] opacity-65">{count || ''}</span>
@@ -465,8 +466,11 @@ export default function DestinationPage() {
             </nav>
           </div>
           <div className="px-4 pb-6 pt-4 sm:px-6">
-            {categories.filter(({ key }) => key === activeCategory).map((categoryItem) => {
+            {categories.map((categoryItem) => {
               const sectionPlaces = getVisibleCategoryPlaces(categoryItem.key);
+              const isExpanded = expandedCategories[categoryItem.key];
+              const displayedPlaces = isExpanded ? sectionPlaces : sectionPlaces.slice(0, 5);
+              const hasMore = sectionPlaces.length > 5;
               const isSearching = searchingCategories.has(categoryItem.key);
               const unmatchedEntities = crawlerEntities.filter((entity) => normalizedCategory(entity.entity_type) === categoryItem.key
                 && !categoryPlaces[categoryItem.key].some((place) =>
@@ -492,7 +496,7 @@ export default function DestinationPage() {
                   }} className="shrink-0 rounded-full bg-white px-3 py-1.5 font-bold text-pine shadow-sm ring-1 ring-amber-200 hover:bg-amber-100">Try again</button>
                 </div>}
                 {sectionPlaces.length > 0 && <ol className="space-y-3">
-              {sectionPlaces.map((place) => {
+              {displayedPlaces.map((place) => {
                 const placeCategory = categoryItem;
                 return <li key={place.id}>
                   <article className={`overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md ${selectedId === place.id ? 'border-green-medium ring-1 ring-green-medium/20' : 'border-[#e0e7e1]'}`}>
@@ -521,6 +525,10 @@ export default function DestinationPage() {
                 </li>
               })}
             </ol>}
+                {hasMore && <button type="button" onClick={() => setExpandedCategories((prev) => ({ ...prev, [categoryItem.key]: !isExpanded }))} className="mt-3 flex items-center gap-1.5 text-xs font-bold text-pine hover:underline focus-visible:outline-none">
+                  {isExpanded ? 'Show less' : `Show ${sectionPlaces.length - 5} more`}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><path d="m6 9 6 6 6-6"/></svg>
+                </button>}
                 {!sectionPlaces.length && !isSearching && !showWishlistOnly && googleResults[categoryItem.key] !== undefined && <div className="rounded-xl border border-dashed border-[#cfd9d1] bg-white p-5 text-center">
                   <p className="text-sm font-semibold text-[#68766e]">No {categoryItem.title.toLowerCase()} found yet.</p>
                   <p className="mt-1 text-xs leading-5 text-[#718077]">Saved guide entries and nearby map results will appear here when available.</p>
@@ -541,7 +549,7 @@ export default function DestinationPage() {
             {showWishlistOnly && !categoryPlaces[activeCategory]?.some((place) => wishlistIds.has(String(place.id))) && <div className="rounded-xl border border-dashed border-[#cfd9d1] bg-white p-6 text-center">
               <Heart className="mx-auto text-[#8a9a8e]" size={26} />
               <h3 className="mt-3 font-bold text-pine">Your wishlist is empty</h3>
-              <p className="mt-1 text-sm leading-6 text-[#718077]">Use the heart buttons to save places, restaurants, and hotels for your trip.</p>
+              <p className="mt-1 text-sm leading-6 text-[#718077]">Use the heart buttons to save places and restaurants for your trip.</p>
             </div>}
             {guideFacts.length > 0 && <section className="mt-6 rounded-xl border border-[#e0e7e1] bg-white p-4" aria-label="Travel guide research">
               <div className="flex items-center gap-2 text-sm font-bold text-pine"><BookOpen size={16} className="text-pine" />Travel guide notes</div>

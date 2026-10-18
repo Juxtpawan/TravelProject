@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { loadUserWishlists, saveUserWishlists } from '../api/wishlistApi';
+import { getCachedPlaceDetails, cachePlaceDetails } from '../../places/api/googlePlaces';
 import {
   clearGuestWishlistStorage,
   createWishlistId,
@@ -18,16 +19,26 @@ import {
 const GUEST_IMPORT_OWNER_KEY = `${WISHLISTS_STORAGE_KEY}:guest-import-owner`;
 
 function makeWishlistItem(place, destinationSlug, destinationName) {
+  const id = String(place.id || place.google_place_id || place.name);
+  const cached = getCachedPlaceDetails(id);
+  const name = (place.name && place.name !== 'Saved place')
+    ? place.name
+    : (cached?.name || place.displayName || 'Saved place');
+  const formattedAddress = place.formattedAddress || place.formatted_address || cached?.formattedAddress || '';
+  if (name && name !== 'Saved place') {
+    cachePlaceDetails(id, { name, formattedAddress });
+  }
+
   return {
-    id: String(place.id || place.google_place_id || place.name),
+    id,
     provider: place.provider === 'google' || place.google_place_id || place.googlePlaceId || place.source === 'Google Maps' ? 'google' : 'app',
-    name: place.name || 'Saved place',
+    name,
     category: normalizeWishlistCategory(place.category),
     destinationSlug: place.destinationSlug || destinationSlug || '',
     destinationName: place.destinationName || destinationName || (destinationSlug || '').replace(/-/g, ' '),
-    formattedAddress: place.formattedAddress || place.formatted_address || '',
-    latitude: place.latitude ?? place.lat ?? null,
-    longitude: place.longitude ?? place.lng ?? null,
+    formattedAddress,
+    latitude: place.latitude ?? place.lat ?? cached?.latitude ?? null,
+    longitude: place.longitude ?? place.lng ?? cached?.longitude ?? null,
     photoUrl: place.photoUrl || place.photo_url || '',
     summary: place.summary || place.description || '',
   };

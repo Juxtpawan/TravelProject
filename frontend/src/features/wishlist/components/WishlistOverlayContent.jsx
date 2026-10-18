@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { BedDouble, Check, ChevronDown, Landmark, ListChecks, MapPin, Plus, Search, Trash2, Utensils } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import useWishlist from '../hooks/useWishlist';
 import CommonsPlaceImage from '../../place-images/components/CommonsPlaceImage';
+import { fetchGooglePlaceDetails, getCachedPlaceDetails } from '../../places/api/googlePlaces';
 
 const categories = [
   { id: 'all', label: 'All', Icon: MapPin },
@@ -13,16 +15,51 @@ const categories = [
 
 export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
   const { lists, activeList, activeListId, selectList, createList, removeItem } = useWishlist();
+  const placesLibrary = useMapsLibrary('places');
+  const [resolvedDetails, setResolvedDetails] = useState({});
   const [activeCategory, setActiveCategory] = useState('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState('');
   const listDropdownRef = useRef(null);
+
+  // In accordance with Google Maps Platform Terms of Service:
+  // Server databases store only Place IDs indefinitely. Place names and details
+  // are fetched on-demand client-side using the Google Places JavaScript API.
+  useEffect(() => {
+    activeList.items.forEach((item) => {
+      if (item.provider !== 'google' || !item.id) return;
+      if (resolvedDetails[item.id]) return;
+      const cached = getCachedPlaceDetails(item.id);
+      if (cached?.name && cached.name !== 'Saved place') {
+        setResolvedDetails((prev) => ({ ...prev, [item.id]: cached }));
+        return;
+      }
+      if (placesLibrary) {
+        fetchGooglePlaceDetails(placesLibrary, item.id).then((details) => {
+          if (details?.name) {
+            setResolvedDetails((prev) => ({ ...prev, [item.id]: details }));
+          }
+        });
+      }
+    });
+  }, [activeList.items, placesLibrary, resolvedDetails]);
+
+  const getItemDetails = (item) => {
+    const resolved = resolvedDetails[item.id] || getCachedPlaceDetails(item.id);
+    const name = resolved?.name || (item.name && item.name !== 'Saved place' ? item.name : item.displayName) || '';
+    const formattedAddress = resolved?.formattedAddress || item.formattedAddress || '';
+    return { name, formattedAddress };
+  };
+
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const matchingItems = activeList.items.filter((item) => !normalizedSearch
-    || [item.name, item.displayName, item.destinationName, item.destinationSlug, item.formattedAddress, categories.find((category) => category.id === item.category)?.label]
-      .some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
+  const matchingItems = activeList.items.filter((item) => {
+    if (!normalizedSearch) return true;
+    const { name, formattedAddress } = getItemDetails(item);
+    return [name, item.displayName, item.destinationName, item.destinationSlug, formattedAddress, categories.find((category) => category.id === item.category)?.label]
+      .some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+  });
 
   const visibleCategories = categories.filter((category) => category.id === 'all'
     || matchingItems.some((item) => item.category === category.id));
@@ -133,13 +170,14 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
     {activeList.items.length === 0 ? <div className="mt-6 rounded-2xl border border-dashed border-[#cbd8ce] bg-white px-5 py-12 text-center sm:py-16">
       <MapPin size={28} className="mx-auto text-[#8a9a8e]" />
       <h3 className="mt-3 text-lg font-extrabold text-pine">This wishlist is ready for your next idea</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#718077]">Save places, restaurants, and hotels from a destination guide. You can organize them into separate lists as you plan.</p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#718077]">Save places and restaurants from a destination guide. You can organize them into separate lists as you plan.</p>
       {onShowInGuide && <button type="button" onClick={onShowInGuide} className="mt-5 rounded-full bg-pine px-5 py-2.5 text-sm font-bold text-white transition hover:bg-pine/90">Browse saved places in this guide</button>}
     </div> : !matchingItems.length ? <p className="mt-6 rounded-xl bg-white p-8 text-center text-sm text-[#718077]">No saved places match “{searchTerm}”.</p> : groups.map(({ id, label, Icon, items }) => <section key={id} aria-label={label} className="mt-6 first:mt-5">
       {activeCategory === 'all' && <div className="mb-3 flex items-center gap-2"><Icon size={17} className="text-pine" /><h3 className="text-sm font-extrabold text-pine">{label}</h3><span className="text-xs font-semibold text-[#718077]">{items.length}</span></div>}
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
-          const placeName = item.name && item.name !== 'Saved place' ? item.name : item.displayName;
+          const { name: resolvedName, formattedAddress } = getItemDetails(item);
+          const placeName = resolvedName || (item.name && item.name !== 'Saved place' ? item.name : item.displayName);
           const destinationName = item.destinationName || item.destinationSlug?.replace(/-/g, ' ');
           const categoryName = categories.find((category) => category.id === item.category)?.label || 'Place';
           return <li key={`${item.provider}:${item.id}`} className="group flex min-w-0 overflow-hidden rounded-2xl border border-[#e0e7e1] bg-white shadow-sm transition hover:border-[#b9cbbd] hover:shadow-md">
@@ -150,7 +188,7 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
             <span className="min-w-0 self-center">
               <span className="block line-clamp-2 text-sm font-extrabold text-pine">{placeName || `Saved place in ${destinationName || 'your destination'}`}</span>
               <span className="mt-1 block text-[11px] font-semibold text-[#56645b]">{categoryName}</span>
-              {item.formattedAddress && <span className="mt-1 block line-clamp-2 text-xs text-[#718077]">{item.formattedAddress}</span>}
+              {formattedAddress && <span className="mt-1 block line-clamp-2 text-xs text-[#718077]">{formattedAddress}</span>}
               {destinationName && <span className="mt-1 block truncate text-xs capitalize text-[#718077]">{destinationName}</span>}
               {item.provider === 'google' && <span translate="no" className="mt-1 block text-xs font-normal text-[#5e5e5e]">Google Maps</span>}
             </span>

@@ -22,6 +22,7 @@ export default function HomePage() {
 
   return (
     <div className="pb-16">
+      {/* ─── Hero ─────────────────────────────────────────────── */}
       <section className="relative isolate mx-auto min-h-90 max-w-360 overflow-visible sm:rounded-b-lg">
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#17382d] via-[#42604b] to-[#9a6945]" />
         <div aria-hidden="true" className="absolute inset-0 bg-linear-to-r from-[#10261f]/70 via-[#10261f]/35 to-[#10261f]/10" />
@@ -50,6 +51,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ─── Destination Cards ────────────────────────────────── */}
       <div className="app-container">
         <section className="py-12 sm:py-16">
           <div className="mb-6 flex items-end justify-between gap-4">
@@ -63,28 +65,40 @@ export default function HomePage() {
           </div>
 
           {destinations.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {destinations.slice(0, 6).map((destination) => (
                 <button
                   key={destination.id}
                   type="button"
                   onClick={() => openDestination(destination)}
-                  className="group flex min-h-24 items-center justify-between gap-4 rounded-lg border border-[#e4eae5] bg-white p-4 text-left transition hover:border-[#87c4a0] hover:bg-[#f7fbf8]"
+                  className="group relative block aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine text-left cursor-pointer"
                 >
-                  <span className="flex min-w-0 items-center gap-3">
-                    {destination.google_place_id ? (
-                      <CommonsPlaceImage placeId={destination.google_place_id} category="destination" destination={destination.name} name={destination.name} alt={destination.name} className="h-16 w-20 shrink-0" fallback={<MapPin size={19} />} />
-                    ) : (
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-badge-bg text-pine"><MapPin size={19} /></span>
-                    )}
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold text-pine">{destination.name}</span>
-                      <span className="mt-1 block text-sm text-[#68766e]">
-                        {destination.places_count || 0} places{destination.state ? ` · ${destination.state}` : ''}
-                      </span>
+                  {destination.google_place_id ? (
+                    <CommonsPlaceImage
+                      placeId={destination.google_place_id}
+                      category="destination"
+                      destination={destination.name}
+                      name={destination.name}
+                      alt={destination.name}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      fallback={<span className="grid h-full w-full place-items-center bg-[#1b3d30] text-[#9fc7b3]"><MapPin size={28} /></span>}
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center bg-gradient-to-br from-[#1b3d30] to-[#2e5d4a] text-white">
+                      <MapPin size={28} />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent transition-opacity group-hover:from-black/95" />
+                  <div className="absolute inset-x-0 bottom-0 p-4 text-center">
+                    <span className="block truncate text-lg font-black tracking-wide text-white drop-shadow-md sm:text-xl">
+                      {destination.name}
                     </span>
-                  </span>
-                  <ArrowRight size={17} className="shrink-0 text-[#8b9990] transition group-hover:translate-x-1 group-hover:text-pine" />
+                    {destination.country && (
+                      <span className="block text-xs font-semibold text-white/80 drop-shadow mt-0.5">
+                        {destination.country}
+                      </span>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
