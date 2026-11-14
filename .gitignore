@@ -49,4 +49,4 @@ Thumbs.db
 # Local Wikimedia snapshot artifacts.
 snapshots/
 *.tar.gz
-*.ndjson
+*.ndjson.pnpm-store/

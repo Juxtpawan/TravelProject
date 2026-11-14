@@ -4,6 +4,15 @@
   scrollbar-color: #9aaba0 transparent;
 }
 
+.app-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.app-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 .app-scrollbar::-webkit-scrollbar,
 .workspace-pane-scroll::-webkit-scrollbar {
   width: 6px;

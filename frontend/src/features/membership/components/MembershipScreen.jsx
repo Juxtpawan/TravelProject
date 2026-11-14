@@ -58,7 +58,7 @@ export default function PricingPage() {
           const isCurrent = (user?.subscription_tier || 'free') === plan.tier;
           const isPremium = plan.tier === 'premium';
           return (
-            <article key={plan.tier} className={`flex flex-col rounded-lg border p-6 sm:p-8 ${isPremium ? 'border-green-medium bg-[#f1f8f3]' : 'border-[#e1e8e2] bg-white'}`}>
+            <article key={plan.tier} className={`group relative flex flex-col rounded-3xl border p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl sm:p-8 ${isPremium ? 'border-[#9ed9c4] bg-gradient-to-br from-[#e8f8f1] via-white to-[#faf1ed] ring-1 ring-[#00aa6c]/10' : 'border-[#e1e8e2] bg-white'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-pine">{plan.name}</p>

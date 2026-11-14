@@ -16,14 +16,6 @@ const destinationTravelTerms = [
   'cathedral', 'church', 'mosque', 'shrine', 'facade', 'ruins', 'fountain', 'square', 'plaza'
 ];
 
-const strongTravelTerms = new Set([
-  'landmark', 'monument', 'palace', 'fort', 'temple', 'architecture', 'facade',
-  'castle', 'gate', 'cathedral', 'church', 'mosque', 'ruins',
-  'landscape', 'skyline', 'cityscape', 'view', 'scenery', 'panorama',
-  'beach', 'waterfall', 'mountain', 'lake', 'river', 'nature',
-  'travel', 'tourism', 'destination', 'heritage'
-]);
-
 const DISQUALIFIED_TERMS = [
   // People / portraits / human figures / selfies / crowds / events
   'portrait', 'portraits', 'person', 'persons', 'people', 'man', 'men', 'woman', 'women',
@@ -79,157 +71,170 @@ function searchableText(value) {
   return safeText(value, 4000).toLowerCase().replace(/&amp;/g, '&').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
-function relevanceScore({ page, metadata }, placeName, destinationName, category) {
-  const title = searchableText(page.title?.replace(/^File:/i, '').replace(/\.[^.]+$/, ''));
-  const description = searchableText(metadataValue(metadata, 'ImageDescription'));
-  const categories = searchableText(metadataValue(metadata, 'Categories'));
-  const combined = `${title} ${description} ${categories}`;
-
-  // Reject any image of people, portraits, maps, stamps, diagrams, etc.
-  if (isDisqualified(combined)) return -1;
-
-  const destinationTerms = searchableText(destinationName).split(' ').filter((term) => term.length > 2);
-  const genericTerms = new Set(['the', 'and', 'for', 'from', 'hotel', 'resort', 'restaurant', 'cafe', 'coffee', 'shop', 'museum', 'temple', 'church', 'park', 'fort', 'palace', 'beach', 'attraction', 'landmark', 'goa', 'india']);
-  const terms = searchableText(placeName).split(' ').filter((term) => term.length > 2
-    && !genericTerms.has(term) && !destinationTerms.includes(term));
-  if (category !== 'destination' && terms.length) {
-    const exactName = searchableText(placeName);
-    const hasExactName = exactName.length > 2 && (title.includes(exactName) || description.includes(exactName));
-    const matched = terms.filter((term) => combined.includes(term)).length;
-    // Require a distinctive place-name token; city/category matches alone
-    // must never be presented as a photo of a named venue.
-    const requiredMatches = Math.min(terms.length, Math.max(2, Math.ceil(terms.length * 0.75)));
-    if (!hasExactName && matched < requiredMatches) return -1;
-    const categoryTerms = {
-      attraction: ['attraction', 'landmark', 'monument', 'museum', 'temple', 'park', 'fort', 'palace', 'architecture', 'view', 'landscape'],
-      restaurant: ['restaurant', 'cafe', 'dining', 'food', 'eatery', 'cuisine'],
-      hotel: ['hotel', 'resort', 'lodging', 'accommodation'],
-    }[category] || [];
-    const categoryMatches = categoryTerms.filter((term) => combined.includes(term)).length;
-    return (hasExactName ? 100 : 0) + matched * 10 + categoryMatches * 5
-      + (destinationTerms.some((term) => combined.includes(term)) ? 3 : 0);
-  }
-  const matched = destinationTerms.filter((term) => combined.includes(term)).length;
-  if (!matched) return -1;
-  const travelScore = destinationTravelTerms.reduce((score, term) => score
-    + (combined.includes(term) ? (strongTravelTerms.has(term) ? 12 : 3) : 0), 0);
-  return matched * 10 + travelScore;
-}
-
-function cachedTitleRelevant(title, placeName, destinationName, category) {
-  if (!title) return false;
-  if (isDisqualified(title)) return false;
-  const destinationTerms = searchableText(destinationName).split(' ').filter((term) => term.length > 2);
-  const genericTerms = new Set(['the', 'and', 'for', 'from', 'hotel', 'resort', 'restaurant', 'cafe', 'coffee', 'shop', 'museum', 'temple', 'church', 'park', 'fort', 'palace', 'beach', 'attraction', 'landmark', 'india']);
-  const terms = searchableText(placeName).split(' ').filter((term) => term.length > 2
-    && !genericTerms.has(term) && !destinationTerms.includes(term));
-  const normalizedTitle = searchableText(title.replace(/^File:/i, '').replace(/\.[^.]+$/, ''));
-  if (category === 'destination') return destinationTravelTerms.some((term) => strongTravelTerms.has(term) && normalizedTitle.includes(term));
-  if (!terms.length) return false;
-  const requiredMatches = Math.min(terms.length, Math.max(2, Math.ceil(terms.length * 0.75)));
-  return terms.filter((term) => normalizedTitle.includes(term)).length >= requiredMatches;
-}
-
-async function searchCommons(searchQuery, placeName, destinationName, category, relatedOnly = false) {
-  const params = new URLSearchParams({
-    action: 'query', format: 'json', formatversion: '2', generator: 'search',
-    gsrnamespace: '6', gsrsearch: searchQuery, gsrwhat: 'text', gsrlimit: '50',
-    prop: 'imageinfo', iiprop: 'url|mime|size|extmetadata', iiurlwidth: '1400',
-  });
-  const response = await fetch(`${COMMONS_API}?${params}`, {
+async function fetchWikimediaJson(endpoint, params) {
+  const url = new URL(endpoint);
+  url.search = new URLSearchParams(params).toString();
+  const response = await fetch(url, {
     headers: { 'User-Agent': APP_USER_AGENT, 'Api-User-Agent': APP_USER_AGENT },
     signal: AbortSignal.timeout(22000),
   });
-  if (!response.ok) return [];
-  const payload = await response.json();
-  const pages = payload.query?.pages || [];
-  return pages.map((page) => {
+  if (!response.ok) return null;
+  return response.json();
+}
+
+function coordinateDistanceKm(latitude1, longitude1, latitude2, longitude2) {
+  const toRadians = (value) => value * Math.PI / 180;
+  const deltaLatitude = toRadians(latitude2 - latitude1);
+  const deltaLongitude = toRadians(longitude2 - longitude1);
+  const a = Math.sin(deltaLatitude / 2) ** 2
+    + Math.cos(toRadians(latitude1)) * Math.cos(toRadians(latitude2)) * Math.sin(deltaLongitude / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Looks up geotagged Commons files around the exact Google Place selected in
+ * Autocomplete. No free-text Commons search is used by the photo picker.
+ */
+async function findNearbyCommonsImages({ category, destinationName, placeName, googlePlaceName, latitude, longitude }) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+  const payload = await fetchWikimediaJson(COMMONS_API, {
+    action: 'query', format: 'json', formatversion: '2',
+    generator: 'geosearch', ggsprimary: 'all', ggsnamespace: '6',
+    ggsradius: '10000', ggscoord: `${latitude}|${longitude}`, ggslimit: '50',
+    prop: 'coordinates|imageinfo', iiprop: 'url|mime|size|extmetadata', iiurlwidth: '1400',
+  });
+  const identityName = googlePlaceName || placeName || String(destinationName || '').split(',')[0];
+  const genericIdentityTerms = new Set(['the', 'and', 'of', 'near', 'city', 'town', 'village', 'district', 'state', 'india']);
+  const nameTerms = searchableText(identityName).split(' ').filter((term) => term.length > 2
+    && !genericIdentityTerms.has(term));
+  const uniqueNameTerms = [...new Set(nameTerms)];
+  const travelTerms = new Set(destinationTravelTerms);
+  return (payload?.query?.pages || []).flatMap((page) => {
     const info = page.imageinfo?.[0];
     const metadata = info?.extmetadata || {};
     const licenseName = metadataValue(metadata, 'LicenseShortName') || metadataValue(metadata, 'UsageTerms');
-    const candidate = { page, info, metadata, licenseName };
-    let score = relevanceScore(candidate, placeName, destinationName, category);
-    if (relatedOnly) {
-      const titleAndDescription = `${searchableText(page.title)} ${searchableText(metadataValue(metadata, 'ImageDescription'))}`;
-      const destinationTerms = searchableText(destinationName).split(' ').filter((term) => term.length > 2);
-      const categoryTerms = {
-        attraction: ['attraction', 'landmark', 'monument', 'museum', 'temple', 'park', 'fort', 'palace'],
-        restaurant: ['restaurant', 'cafe', 'dining', 'food', 'eatery'],
-        hotel: ['hotel', 'resort', 'lodging', 'accommodation'],
-      }[category] || [];
-      const cityMatches = destinationTerms.filter((term) => titleAndDescription.includes(term)).length;
-      const typeMatches = categoryTerms.filter((term) => titleAndDescription.includes(term)).length;
-      score = cityMatches && typeMatches ? cityMatches * 10 + typeMatches * 5 : -1;
-    }
-    return { ...candidate, score };
-  }).filter(({ info, licenseName, score }) => info?.thumburl && score >= 0
-    && /^image\/(jpeg|png|webp|gif)$/i.test(info.mime || '')
-    && acceptableReuseLicense(licenseName));
+    if (!info?.thumburl || !/^image\/(jpeg|png|webp|gif)$/i.test(info.mime || '')
+        || !acceptableReuseLicense(licenseName)) return [];
+    const location = page.coordinates?.[0];
+    const distanceKm = location && Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lon))
+      ? coordinateDistanceKm(latitude, longitude, Number(location.lat), Number(location.lon))
+      : Number.isFinite(Number(page.dist)) ? Number(page.dist) / 1000 : Infinity;
+    if (distanceKm > 5) return [];
+    const title = searchableText(page.title?.replace(/^File:/i, '').replace(/\.[^.]+$/, ''));
+    const description = searchableText(metadataValue(metadata, 'ImageDescription'));
+    const categories = searchableText(metadataValue(metadata, 'Categories'));
+    const searchable = `${title} ${description} ${categories}`;
+    if (isDisqualified(searchable)) return [];
+    const nameMatches = uniqueNameTerms.filter((term) => searchable.includes(term)).length;
+    const hasTravelContext = [...travelTerms].some((term) => searchable.includes(term));
+    // Very close geotags are strong evidence for the selected Google place.
+    // At greater distances require both destination text and travel context.
+    if (distanceKm > 0.75 && (!nameMatches || !hasTravelContext)) return [];
+    const score = nameMatches * 30 + (hasTravelContext ? 15 : 0) - distanceKm * 4;
+    return [{ page, info, metadata, licenseName, score }];
+  }).sort((a, b) => b.score - a.score).slice(0, 12);
 }
 
-async function findCommonsImage(query, placeName, destinationName, category, relatedOnly = false) {
-  let candidates = await searchCommons(`${query} haswbstatement:P275=Q6938433`, placeName, destinationName, category, relatedOnly);
-  if (!candidates.length && !relatedOnly) {
-    try {
-      candidates = await searchCommons(`${query} incategory:"CC-Zero"`, placeName, destinationName, category, relatedOnly);
-    } catch {
-      // fallback
-    }
-  }
-  if (!candidates.length) {
-    try {
-      candidates = await searchCommons(query, placeName, destinationName, category, relatedOnly);
-    } catch {
-      // fallback
-    }
-  }
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0] ? { ...candidates[0], matchType: relatedOnly ? 'related' : category === 'destination' ? 'destination' : 'place' } : null;
+function asPhotoOption(candidate) {
+  return {
+    title: safeText(candidate.page.title),
+    previewUrl: candidate.info.thumburl,
+    sourceUrl: candidate.info.descriptionurl || '',
+    creator: creatorCredit(candidate.metadata),
+    license: candidate.licenseName,
+    licenseUrl: metadataValue(candidate.metadata, 'LicenseUrl'),
+    score: candidate.score,
+  };
 }
 
-function categorySearchTerm(category) {
-  return ({ attraction: 'landmark monument architecture fort palace temple', restaurant: 'restaurant food cafe cuisine', hotel: 'hotel resort accommodation' })[category] || 'travel';
+export async function getPlaceImageOptions({ category, destinationName, placeName, locationContext = '', googlePlaceName = '', latitude, longitude }) {
+  if (category === 'restaurant' || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+  if (!destinationName || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+  return (await findNearbyCommonsImages({
+    category, destinationName, placeName, googlePlaceName, latitude, longitude,
+  })).map(asPhotoOption);
 }
 
-async function getOrCreatePlaceImageOnce({ env, placeId, category, destinationName, placeName }) {
+async function storeSelectedCommonsImage({ env, placeId, category, destinationName, placeName, locationContext = '', googlePlaceName = '', latitude, longitude, fileTitle }) {
+  const options = await getPlaceImageOptions({
+    category, destinationName, placeName, locationContext, googlePlaceName, latitude, longitude,
+  });
+  const chosen = options.find((option) => option.title === fileTitle);
+  if (!chosen) return null;
+  const payload = await fetchWikimediaJson(COMMONS_API, {
+    action: 'query', format: 'json', formatversion: '2', titles: chosen.title,
+    prop: 'imageinfo', iiprop: 'url|mime|size|extmetadata', iiurlwidth: '1400',
+  });
+  const page = payload?.query?.pages?.[0];
+  const info = page?.imageinfo?.[0];
+  const metadata = info?.extmetadata || {};
+  const licenseName = metadataValue(metadata, 'LicenseShortName') || metadataValue(metadata, 'UsageTerms');
+  if (!info?.thumburl || !acceptableReuseLicense(licenseName)) return null;
+  const response = await fetch(info.thumburl, { headers: { 'User-Agent': APP_USER_AGENT }, signal: AbortSignal.timeout(22000) });
+  if (!response.ok) throw new Error(`Commons image download returned ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  if (!bytes.byteLength || bytes.byteLength > IMAGE_MAX_BYTES) throw new Error('Commons image exceeds the cache size limit.');
+  const contentType = (response.headers.get('content-type') || info.mime).split(';')[0].trim();
+  if (!/^image\/(jpeg|png|webp|gif)$/i.test(contentType)) throw new Error('Image provider returned an unsupported image type.');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${placeId}:${category}`));
+  const objectKey = `place-images/wikimedia-commons/${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  await env.BUCKET.put(objectKey, bytes, {
+    httpMetadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' },
+    customMetadata: { sourcePage: info.descriptionurl || '', license: licenseName, sourceProvider: 'wikimedia-commons' },
+  });
+  const row = {
+    provider: 'google', placeId, category, objectKey, matchType: 'user-selected',
+    sourceProvider: 'wikimedia-commons', fileTitle: safeText(page.title),
+    filePageUrl: info.descriptionurl || chosen.sourceUrl,
+    creator: creatorCredit(metadata), licenseName,
+    licenseUrl: metadataValue(metadata, 'LicenseUrl'), checkedAt: new Date().toISOString(),
+  };
+  await savePlaceImage(row);
+  recentMisses.delete(`${placeId}:${category}`);
+  return row;
+}
+
+export async function selectPlaceImage(args) {
+  if (!args.env?.BUCKET || args.category === 'restaurant' || String(args.placeId || '').startsWith('local:')) return null;
+  return storeSelectedCommonsImage(args);
+}
+
+async function getOrCreatePlaceImageOnce({ env, placeId, category, destinationName, placeName, googlePlaceName = '', latitude, longitude }) {
+  // Restaurant imagery is served from the live Google Places photo field in
+  // the browser; never create or refresh Commons/R2 restaurant copies.
+  if (category === 'restaurant' || String(placeId || '').startsWith('local:')) return null;
   const storedImage = await findPlaceImage('google', placeId, category);
   // Ignore legacy Pixabay rows while that provider is disabled.
   const existing = storedImage?.source_provider === 'pixabay' ? null : storedImage;
   const cacheKey = `${placeId}:${category}`;
+  if (existing?.match_type === 'user-selected' && existing.object_key
+      && await env.BUCKET.head(existing.object_key)) return { ...existing, cached: true };
   if (existing && !existing.object_key
-      && Date.now() - Date.parse(existing.checked_at) < 24 * 60 * 60 * 1000) return null;
+      && Date.now() - Date.parse(existing.checked_at) < MISS_REFRESH_AFTER_MS) return null;
   const missedAt = recentMisses.get(cacheKey);
   if (missedAt && Date.now() - missedAt < MISS_REFRESH_AFTER_MS) return null;
   if (missedAt) recentMisses.delete(cacheKey);
+  const existingImageIsRelevant = existing?.match_type === 'google-geosearch';
   if (existing && acceptableReuseLicense(existing.license_name)
       && !isDisqualified(existing.file_title)
-      && (existing.match_type === 'destination' || existing.match_type === 'representative'
-      || cachedTitleRelevant(existing.file_title, placeName, destinationName, category))
+      && existingImageIsRelevant
       && Date.now() - Date.parse(existing.checked_at) < REFRESH_AFTER_MS) {
     if (!existing.object_key) return null;
     if (await env.BUCKET.head(existing.object_key)) return { ...existing, cached: true };
   }
-  const query = category === 'destination' ? destinationName : placeName;
-  let candidate = null;
-  try {
-    candidate = await findCommonsImage(query, placeName, destinationName, category);
-  } catch (error) {
-    console.warn('[Place images] Commons search unavailable:', error?.message || error);
-  }
-  if (!candidate && category !== 'destination') {
-    const categoryQuery = categorySearchTerm(category);
-    try {
-      candidate = await findCommonsImage(`${destinationName} ${categoryQuery}`, '', destinationName, category, true);
-    } catch (error) {
-      console.warn('[Place images] Commons category fallback unavailable:', error?.message || error);
-    }
-  }
+  // Do not cache a miss until the exact Google Place coordinates are present;
+  // the photo client may be waiting for the Places library to load.
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  const candidate = (await findNearbyCommonsImages({
+    category, destinationName, placeName, googlePlaceName, latitude, longitude,
+  }))[0] || null;
   if (!candidate) {
     if (existing?.object_key) await env.BUCKET.delete(existing.object_key);
     await savePlaceImageMiss('google', placeId, category, new Date().toISOString());
     recentMisses.set(cacheKey, Date.now());
     return null;
   }
+  candidate.matchType = 'google-geosearch';
   const { page, info, metadata, licenseName } = candidate;
   const imageResponse = await fetch(info.thumburl, {
     headers: { 'User-Agent': APP_USER_AGENT }, signal: AbortSignal.timeout(22000),

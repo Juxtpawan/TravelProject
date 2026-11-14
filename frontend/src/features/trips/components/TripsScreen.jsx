@@ -6,6 +6,8 @@ import { useAuth } from '../../auth';
 import { createTrip, deleteTrip, getTrips } from '../api/tripsApi';
 import { autocompleteDestinations, getDestinationPlaceDetails, resolveDestination } from '../../places/api/placesApi';
 import DateRangePicker from '../../../shared/components/date-range-picker/DateRangePicker';
+import GoogleMapsAttribution from '../../../shared/components/google-maps-attribution/GoogleMapsAttribution';
+import CommonsPlaceImage from '../../place-images/components/CommonsPlaceImage';
 
 function formatDate(date) {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -30,7 +32,6 @@ function TripDestinationSearch({ onSelect }) {
   const [dropdownRect, setDropdownRect] = useState(null);
   const containerRef = useRef(null);
   const sessionToken = useRef(null);
-  const searchQuery = useRef('');
   const input = query.trim();
   const suggestions = suggestionState.query === input ? suggestionState.items : [];
   const loadingSuggestions = input.length >= 3 && !selected && (suggestionState.query !== input || suggestionState.status === 'loading');
@@ -38,17 +39,17 @@ function TripDestinationSearch({ onSelect }) {
 
   useEffect(() => {
     if (!showDropdown) {
-      setDropdownRect(null);
       return undefined;
     }
     const updatePosition = () => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) setDropdownRect({ top: rect.bottom + 8, left: rect.left, width: rect.width });
     };
-    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
@@ -64,7 +65,6 @@ function TripDestinationSearch({ onSelect }) {
       if (active) setSuggestionState({ query: input, status: 'loading', items: [] });
       try {
         if (!sessionToken.current) sessionToken.current = crypto.randomUUID();
-        searchQuery.current = input;
         const response = await autocompleteDestinations(input, sessionToken.current);
         if (active) setSuggestionState({ query: input, status: 'loaded', items: response.suggestions || [] });
       } catch (requestError) {
@@ -83,7 +83,6 @@ function TripDestinationSearch({ onSelect }) {
     setError('');
     onSelect(null);
     if (!value.trim()) {
-      searchQuery.current = '';
       sessionToken.current = null;
     }
   };
@@ -100,7 +99,7 @@ function TripDestinationSearch({ onSelect }) {
     sessionToken.current = null;
     try {
       const place = await getDestinationPlaceDetails(prediction.placeId, token);
-      const destination = await resolveDestination(searchQuery.current || input, place.placeId || prediction.placeId, place.location || undefined);
+      const destination = await resolveDestination(prediction.mainText?.trim() || selectedLabel, place.placeId || prediction.placeId, place.location || undefined);
       // Keep the complete prediction label, including its location context.
       setQuery(selectedLabel || destination.name);
       onSelect(destination);
@@ -114,7 +113,7 @@ function TripDestinationSearch({ onSelect }) {
   return <div className="relative mt-1.5">
     <div ref={containerRef} className="flex min-h-11 items-center gap-3 rounded-md border border-[#d6dfd8] bg-white px-3 py-2 transition focus-within:border-green-medium focus-within:ring-2 focus-within:ring-green-medium/15">
       {resolving || loadingSuggestions ? <LoaderCircle size={17} className="shrink-0 animate-spin text-pine" /> : selected ? <Check size={17} className="shrink-0 text-green-700" /> : <Search size={17} className="shrink-0 text-[#66736b]" />}
-      <textarea rows={selected ? 2 : 1} value={query} onChange={event => updateQuery(event.target.value)} placeholder="Search cities, regions, or countries" autoComplete="off" disabled={resolving} className="max-h-20 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-sm font-normal leading-5 text-pine outline-none placeholder:text-[#7b8980] disabled:opacity-70" aria-label="Search destinations" aria-autocomplete="list" aria-expanded={showDropdown && (suggestions.length > 0 || loadingSuggestions)} />
+      <textarea rows={selected ? 2 : 1} value={query} onChange={event => updateQuery(event.target.value)} placeholder="Search cities, regions, or countries" autoComplete="off" disabled={resolving} className="max-h-20 min-h-6 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-sm font-normal leading-5 text-pine outline-none focus-visible:outline-none placeholder:text-[#7b8980] disabled:opacity-70" aria-label="Search destinations" aria-autocomplete="list" aria-expanded={showDropdown && (suggestions.length > 0 || loadingSuggestions)} />
     </div>
     {showDropdown && dropdownRect && createPortal(<ul role="listbox" style={{ position: 'fixed', top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, zIndex: 100 }} className="app-scrollbar max-h-60 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)]">
       {suggestions.map(prediction => <li key={prediction.placeId} role="option" aria-selected="false">
@@ -124,7 +123,7 @@ function TripDestinationSearch({ onSelect }) {
         </button>
       </li>)}
       {!suggestions.length && <li className="px-4 py-3 text-sm text-[#68766e]">{loadingSuggestions ? 'Searching Google destinations…' : suggestionState.status === 'failed' ? 'Google suggestions are unavailable.' : 'No matching destinations. Try another search.'}</li>}
-      {suggestions.length > 0 && <li translate="no" className="border-t border-[#edf1ed] px-4 py-1.5 text-right text-xs font-normal text-[#5e5e5e]">Google Maps</li>}
+      {suggestions.length > 0 && <li className="border-t border-[#edf1ed] px-4 py-1.5 text-right"><GoogleMapsAttribution /></li>}
     </ul>, document.body)}
     {resolving && <p role="status" className="mt-1.5 text-xs text-[#66736b]">Loading selected destination…</p>}
     {error && <p role="alert" className="mt-1.5 text-xs text-[#9b3e32]">{error}</p>}
@@ -241,7 +240,7 @@ export default function TripsPage() {
           <h1 className="mt-1 text-3xl font-extrabold text-pine sm:text-4xl">My trips</h1>
           <p className="mt-2 text-sm text-[#66736b]">Keep the places, dates, and details for every getaway together.</p>
         </div>
-        <button type="button" onClick={() => { setError(''); setIsModalOpen(true); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-pine px-5 text-sm font-bold text-white transition hover:bg-[#203b30]">
+        <button type="button" onClick={() => { setError(''); setIsModalOpen(true); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#004f32] px-5 text-sm font-bold text-white transition-colors hover:bg-[#003d27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-medium focus-visible:ring-offset-2">
           <Plus size={17} /> Plan a trip
         </button>
       </div>
@@ -249,25 +248,30 @@ export default function TripsPage() {
       {error && !isModalOpen && <p role="alert" className="mt-5 rounded-lg bg-[#fff4f1] p-4 text-sm text-[#9b3e32]">{error}</p>}
 
       {trips.length ? (
-        <div className="divide-y divide-[#e5eae6]">
+        <div className="mt-7 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {trips.map((trip) => (
-            <article key={trip.id} className="group relative flex flex-col justify-between gap-5 rounded-2xl border border-[#e5eae6] bg-white p-5 pr-14 transition duration-200 hover:border-[#cdd9d0] hover:shadow-md sm:p-6 sm:pr-16">
-              <button type="button" onClick={() => { setError(''); setTripToDelete(trip); }} aria-label={`Delete ${trip.title} itinerary`} title="Delete itinerary" className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#e5eae6] text-[#75847b] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:right-5 sm:top-5">
-                <Trash2 size={16} />
-              </button>
-              <div className="flex min-w-0 items-start gap-4">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#edf5ef] text-pine"><MapPin size={21} /></span>
-                <div className="min-w-0">
-                  <h2 className="mt-1 truncate text-xl font-bold text-pine sm:text-2xl">{trip.title}</h2>
-                  {trip.destination_name && trip.destination_name.trim().toLowerCase() !== trip.title?.trim().toLowerCase() && <p className="mt-1 flex items-center gap-1.5 text-sm text-[#66736b]"><MapPin size={14} className="shrink-0" />{trip.destination_name}</p>}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-[#66736b]">
-                    <p className="inline-flex items-center gap-1.5"><CalendarDays size={15} className="text-pine" />{formatDate(trip.start_date)} – {formatDate(trip.end_date)}</p>
-                    <span className="rounded-full bg-[#f1f5f2] px-2.5 py-1 text-xs font-semibold text-pine">{Math.round((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1} days</span>
-                  </div>
-                </div>
+            <article key={trip.id} tabIndex={0} aria-label={`Open ${trip.title} itinerary`} onClick={event => {
+              if (event.target.closest('a, button')) return;
+              navigate(`/trips/${trip.id}`);
+            }} onKeyDown={event => {
+              if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+              event.preventDefault();
+              navigate(`/trips/${trip.id}`);
+            }} className="group relative flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#e3e9e5] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#bfd8cc] hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-medium">
+              <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#d8eee5] via-[#8dbca9] to-[#285d4c]">
+                {trip.destination_google_place_id && <CommonsPlaceImage placeId={trip.destination_google_place_id} category="destination" destination={trip.destination_name || trip.title} name={trip.destination_name || trip.title} latitude={trip.destination_latitude} longitude={trip.destination_longitude} alt="" rounded={false} className="absolute inset-0 h-full w-full transition-transform duration-500 group-hover:scale-105" fallback={<MapPin size={30} />} />}
               </div>
-              <div className="flex justify-end sm:pl-4">
-                <Link to={`/trips/${trip.id}`} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover sm:w-auto">
+              {trip.trip_role === 'owner' && <button type="button" onClick={() => { setError(''); setTripToDelete(trip); }} aria-label={`Delete ${trip.title} itinerary`} title="Delete itinerary" className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/95 text-[#75847b] shadow-sm transition hover:scale-105 hover:border-red-200 hover:bg-red-50 hover:text-red-700">
+                <Trash2 size={16} />
+              </button>}
+              <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+                <h2 className="truncate text-lg font-extrabold text-pine sm:text-xl">{trip.title}</h2>
+                {trip.trip_role !== 'owner' && <p className="mt-1 text-xs font-semibold text-green-ink">Shared with you · {trip.trip_role === 'editor' ? 'Can edit' : 'View only'}</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#66736b]">
+                  <p className="inline-flex min-w-0 items-center gap-1.5"><CalendarDays size={15} className="shrink-0 text-green-ink" /><span className="truncate">{formatDate(trip.start_date)} – {formatDate(trip.end_date)}</span></p>
+                  <span className="rounded-full bg-badge-bg px-2.5 py-1 text-xs font-bold text-badge-text">{Math.round((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1} days</span>
+                </div>
+                <Link to={`/trips/${trip.id}`} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:-translate-y-0.5 hover:bg-btn-primary-bg-hover hover:shadow-md">
                   Open itinerary <ArrowRight size={16} />
                 </Link>
               </div>
@@ -284,8 +288,8 @@ export default function TripsPage() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-[#10261f]/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsModalOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="create-trip-title" className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-2xl sm:p-8">
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsModalOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="create-trip-title" className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
             <div className="mb-6">
               <p className="text-sm font-bold text-pine">Start planning</p>
               <h2 id="create-trip-title" className="mt-1 text-2xl font-extrabold text-pine">Create a trip</h2>
@@ -309,8 +313,8 @@ export default function TripsPage() {
         </div>
       )}
 
-      {tripToDelete && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#10261f]/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !deletingTripId) setTripToDelete(null); }}>
-        <section role="alertdialog" aria-modal="true" aria-labelledby="delete-trip-title" aria-describedby="delete-trip-description" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+      {tripToDelete && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !deletingTripId) setTripToDelete(null); }}>
+        <section role="alertdialog" aria-modal="true" aria-labelledby="delete-trip-title" aria-describedby="delete-trip-description" className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
           <h2 id="delete-trip-title" className="text-lg font-bold text-pine">Delete this itinerary?</h2>
           <p id="delete-trip-description" className="mt-2 text-sm leading-6 text-[#66736b]">This will permanently delete <strong>{tripToDelete.title}</strong> and all its planned stops.</p>
           <div className="mt-6 flex justify-end gap-3">

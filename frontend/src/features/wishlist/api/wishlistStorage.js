@@ -52,7 +52,6 @@ function migrateLegacyLists() {
   try {
     Object.keys(localStorage).filter((key) => key.startsWith(LEGACY_PREFIX)).forEach((key) => {
       const destinationSlug = key.slice(LEGACY_PREFIX.length);
-      const destinationName = destinationSlug.replace(/-/g, ' ');
       const saved = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(saved)) return;
       saved.filter((item) => item && typeof item === 'object').forEach((item) => items.push({

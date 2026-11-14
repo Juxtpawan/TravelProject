@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { acquireBodyScrollLock } from '../../utils/bodyScrollLock';
 
 /** Reusable responsive overlay shell for full-screen shared surfaces. */
 export default function OverlayLayout({ title, onClose, headerActions, children, labelledBy }) {
@@ -8,12 +9,11 @@ export default function OverlayLayout({ title, onClose, headerActions, children,
   const onCloseRef = useRef(onClose);
   const generatedId = useId();
   const titleId = labelledBy || `overlay-title-${generatedId.replaceAll(':', '')}`;
-  onCloseRef.current = onClose;
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
     const previousFocus = document.activeElement;
-    document.body.style.overflow = 'hidden';
+    const releaseBodyScrollLock = acquireBodyScrollLock();
     closeButtonRef.current?.focus();
 
     const closeOnEscape = (event) => {
@@ -21,7 +21,7 @@ export default function OverlayLayout({ title, onClose, headerActions, children,
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseBodyScrollLock();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
       document.removeEventListener('keydown', closeOnEscape);
     };

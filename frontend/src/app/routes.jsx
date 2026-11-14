@@ -14,6 +14,8 @@ import TripPage from '../pages/TripPage';
 import PricingPage from '../pages/PricingPage';
 import ProfilePage from '../pages/ProfilePage';
 import AiPlannerPage from '../pages/AiPlannerPage';
+import SharedTripPage from '../pages/SharedTripPage';
+import TripInvitePage from '../pages/TripInvitePage';
 
 // Auth Components
 import { LoginForm, SignupForm } from '../features/auth'; // 2. IMPORT FORMS
@@ -26,6 +28,8 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomePage /> },
       { path: '/explore', element: <ExplorePage /> },
       { path: '/trips', element: <TripPage/> },
+      { path: '/trips/shared/:tripId/:token', element: <SharedTripPage /> },
+      { path: '/trips/invite/:tripId/:token', element: <TripInvitePage /> },
       { path: '/pricing', element: <PricingPage /> },
       { path: '/profile', element: <ProfilePage /> },
       { path: '/ai', element: <AiPlannerPage /> },
@@ -38,6 +42,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/trips/:tripId', element: <TripDetailsPage /> },
       { path: '/locations/:slug', element: <DestinationPage /> },
+      { path: '/locations/:slug/:category', element: <DestinationPage /> },
     ],
   },
 

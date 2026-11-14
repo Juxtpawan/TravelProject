@@ -21,16 +21,21 @@ function formatCompactRange(startDate, endDate) {
 }
 
 /** Shared single-month date range picker. Dates use YYYY-MM-DD strings. */
-export default function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, compact = false }) {
+export default function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, compact = false, fullWidth = false, selectionMode = 'range', selectedDate = '', onDateChange = () => {}, dateLabel = 'Choose date', emptyLabel = 'Choose date' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isYearView, setIsYearView] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
+    const initialDate = selectionMode === 'single' && selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+    return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
   });
   const formatIso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const chooseDate = date => {
     const value = formatIso(date);
+    if (selectionMode === 'single') {
+      onDateChange(value);
+      setIsOpen(false);
+      return;
+    }
     if (!startDate || (startDate && endDate)) {
       onStartChange(value);
       onEndChange('');
@@ -70,9 +75,9 @@ export default function DateRangePicker({ startDate, endDate, onStartChange, onE
       <button type="button" aria-label={isYearView ? 'Next years' : 'Next month'} onClick={() => isYearView ? setYearRangeStart(year => year + 20) : setVisibleMonth(date => new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="grid h-8 w-8 place-items-center rounded-full text-pine hover:bg-[#f2f5f2]"><ChevronRight size={18} /></button>
     </div>
     {isYearView ? <div className="grid max-h-60 grid-cols-4 gap-2 overflow-y-auto py-1">
-      {Array.from({ length: 20 }, (_, index) => yearRangeStart + index).map(year => <button key={year} type="button" aria-pressed={year === month.getFullYear()} onClick={() => { setVisibleMonth(date => new Date(year, date.getMonth(), 1)); setIsYearView(false); }} className={`rounded-lg px-2 py-2.5 text-sm transition ${year === month.getFullYear() ? 'bg-pine font-bold text-white' : 'text-[#35433d] hover:bg-[#f2f5f2]'}`}>{year}</button>)}
+      {Array.from({ length: 20 }, (_, index) => yearRangeStart + index).map(year => <button key={year} type="button" aria-pressed={year === month.getFullYear()} onClick={() => { setVisibleMonth(date => new Date(year, date.getMonth(), 1)); setIsYearView(false); }} className={`rounded-lg px-2 py-2.5 text-sm transition ${year === month.getFullYear() ? 'bg-btn-primary-bg font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover' : 'text-[#35433d] hover:bg-[#f2f5f2]'}`}>{year}</button>)}
     </div> : <>
-      <p className="mb-1 text-center text-[11px] text-[#66736b]">{startDate && !endDate ? 'Choose the last day' : 'Choose the first day'}</p>
+      <p className="mb-1 text-center text-[11px] text-[#66736b]">{selectionMode === 'single' ? dateLabel : startDate && !endDate ? 'Choose the last day' : 'Choose the first day'}</p>
       <div className="grid grid-cols-7 text-center text-[10px] font-semibold uppercase text-[#89958d]">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => <span key={day} className="py-1">{day}</span>)}</div>
       <div className="grid grid-cols-7">
         {Array.from({ length: firstWeekday }, (_, index) => <span key={`blank-${index}`} />)}
@@ -80,10 +85,10 @@ export default function DateRangePicker({ startDate, endDate, onStartChange, onE
           const day = index + 1;
           const date = new Date(month.getFullYear(), month.getMonth(), day);
           const value = formatIso(date);
-          const selected = value === startDate || value === endDate;
+          const selected = selectionMode === 'single' ? value === selectedDate : value === startDate || value === endDate;
           const inRange = startDate && endDate && value > startDate && value < endDate;
           const isToday = value === todayValue;
-          return <button key={value} type="button" aria-label={date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} aria-pressed={selected} onClick={() => chooseDate(date)} className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-xs transition ${selected ? 'bg-pine font-bold text-white' : inRange ? 'rounded-none bg-[#e8f1ea] text-pine' : isToday ? 'border border-green-medium font-bold text-pine' : 'text-[#35433d] hover:bg-[#f2f5f2]'}`}>{day}</button>;
+          return <button key={value} type="button" aria-label={date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} aria-pressed={selected} onClick={() => chooseDate(date)} className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-xs transition ${selected ? 'bg-btn-primary-bg font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover' : inRange ? 'rounded-none bg-[#e8f1ea] text-pine' : isToday ? 'border border-green-medium font-bold text-pine' : 'text-[#35433d] hover:bg-[#f2f5f2]'}`}>{day}</button>;
         })}
       </div>
     </>}
@@ -91,12 +96,12 @@ export default function DateRangePicker({ startDate, endDate, onStartChange, onE
   </div>;
 
   return <div>
-    <button type="button" onClick={() => setIsOpen(true)} aria-label="Choose trip dates" aria-expanded={isOpen} className={`flex items-center justify-between gap-2 text-left transition focus:outline-none focus:ring-2 focus:ring-green-medium/20 ${compact ? 'min-h-9 w-auto min-w-[128px] max-w-[230px] rounded-full border border-white/25 bg-white/5 px-2.5 py-1 text-white hover:bg-white/10 sm:min-h-10' : 'min-h-12 w-full gap-3 rounded-md border border-[#d6dfd8] px-3 py-2 hover:border-green-medium'}`}>
-      <span className="min-w-0"><span className={`block truncate font-semibold ${compact ? 'text-xs text-white sm:text-sm' : 'text-sm text-pine'}`}>{startDate && endDate ? compact ? `${tripDays} ${tripDays === 1 ? 'day' : 'days'} · ${formatCompactRange(startDate, endDate)}` : `${formatDate(startDate)} – ${formatDate(endDate)}` : compact ? 'Trip dates' : 'Choose dates'}</span>{tripDays > 0 && !compact && <span className="block text-[11px] text-[#66736b]">{tripDays} {tripDays === 1 ? 'day' : 'days'}</span>}</span><CalendarDays size={compact ? 15 : 17} className={`shrink-0 ${compact ? 'text-amber-200' : 'text-[#75847b]'}`} />
+    <button type="button" onClick={() => setIsOpen(true)} aria-label={selectionMode === 'single' ? dateLabel : 'Choose trip dates'} aria-expanded={isOpen} className={`flex items-center justify-between gap-2 text-left transition focus:outline-none focus:ring-2 focus:ring-green-medium/20 ${compact ? fullWidth ? 'h-9 min-h-9 w-full min-w-0 max-w-none rounded-lg border border-[#d6e7dc] bg-white px-2 py-0 text-pine hover:bg-[#f8fcfa]' : 'min-h-9 w-auto min-w-[128px] max-w-[230px] rounded-xl border border-[#d6e7dc] bg-white px-3 py-1 text-pine hover:bg-[#f8fcfa] sm:min-h-10' : 'min-h-12 w-full gap-3 rounded-md border border-[#d6dfd8] px-3 py-2 hover:border-green-medium'}`}>
+      <span className="min-w-0"><span className={`block truncate font-semibold ${compact ? 'text-xs text-pine sm:text-sm' : 'text-sm text-pine'}`}>{selectionMode === 'single' ? selectedDate ? formatDate(selectedDate) : emptyLabel : startDate && endDate ? compact ? `${tripDays} ${tripDays === 1 ? 'day' : 'days'} · ${formatCompactRange(startDate, endDate)}` : `${formatDate(startDate)} – ${formatDate(endDate)}` : compact ? 'Trip dates' : 'Choose dates'}</span>{selectionMode !== 'single' && tripDays > 0 && !compact && <span className="block text-[11px] text-[#66736b]">{tripDays} {tripDays === 1 ? 'day' : 'days'}</span>}</span><CalendarDays size={compact ? 15 : 17} className={`shrink-0 ${compact ? 'text-green-ink' : 'text-[#75847b]'}`} />
     </button>
     {isOpen && (compact ? createPortal(
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4" role="presentation" onClick={() => setIsOpen(false)}>
-        <div role="dialog" aria-modal="true" aria-label="Choose trip dates" onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-white p-1 shadow-2xl">{calendarPanel}</div>
+      <div data-autosave-ignore="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4" role="presentation" onClick={() => setIsOpen(false)}>
+        <div role="dialog" aria-modal="true" aria-label={selectionMode === 'single' ? dateLabel : 'Choose trip dates'} onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-white p-1 shadow-2xl">{calendarPanel}</div>
       </div>, document.body
     ) : <div className="mt-2 sm:max-w-sm">{calendarPanel}</div>)}
   </div>;

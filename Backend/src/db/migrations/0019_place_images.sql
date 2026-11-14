@@ -12,5 +12,7 @@ CREATE TABLE IF NOT EXISTS place_images (
     license_url TEXT,
     modified INTEGER NOT NULL DEFAULT 0,
     checked_at TEXT NOT NULL,
+    match_type TEXT NOT NULL DEFAULT 'place',
+    source_provider TEXT NOT NULL DEFAULT 'wikimedia-commons',
     PRIMARY KEY (provider, place_id, category)
 );

@@ -5,8 +5,8 @@ export async function getDestinations() {
   return Array.isArray(data) ? data : [];
 }
 
-export async function searchPlaces(query, destinationSlug) {
-  const { data } = await apiClient.post('/search', { query, destinationSlug });
+export async function searchPlaces(query, destinationSlug, category, fast = false) {
+  const { data } = await apiClient.post('/search', { query, destinationSlug, category, fast });
   return data.results || [];
 }
 

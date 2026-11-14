@@ -1,24 +1,81 @@
 import { apiClient } from '../../../lib/apiClient';
 
-// Keep the live Google field mask minimal. Display name and address are shown
-// in guide cards; location is needed to place the result on the map.
+// Keep Text Search to card/map fields. Rating and review count put this request
+// at Enterprise; Atmosphere fields such as editorialSummary and reviews are
+// requested only after a user opens the corresponding place detail section.
 const GUIDE_PLACE_FIELDS = [
   'id',
   'displayName',
   'formattedAddress',
   'location',
+  'rating',
+  'userRatingCount',
+  'primaryTypeDisplayName',
 ];
 
 const CATEGORY_SEARCH = {
-  attraction: (destinationName) => ({
-    textQuery: `top places to visit, tourist attractions, landmarks, museums, and parks in ${destinationName}`,
-  }),
-  restaurant: (destinationName) => ({
-    textQuery: `restaurants in ${destinationName}`,
-    includedType: 'restaurant',
-    useStrictTypeFiltering: true,
-  }),
+  attraction: [
+    (name) => `top places to visit, tourist attractions, landmarks, museums, and parks in ${name}`,
+    (name) => `popular historic sites, cultural attractions, and museums in ${name}`,
+    (name) => `popular parks, viewpoints, and must-see attractions in ${name}`,
+  ],
+  restaurant: [
+    (name) => `restaurants in ${name}`,
+    (name) => `top-rated local restaurants and regional food in ${name}`,
+    (name) => `popular restaurants for local cuisine and dining in ${name}`,
+  ],
 };
+
+const GUIDE_SEARCH_QUOTA_KEY = 'guide_places_text_search_quota_date';
+let guideSearchQuotaBlockedDate = '';
+
+function quotaBlockDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isQuotaError(error) {
+  const message = String(error?.message || error || '');
+  return error?.code === 429 || /RESOURCE_EXHAUSTED|quota exceeded|SearchTextRequest|\b429\b/i.test(message);
+}
+
+function markGuideSearchQuotaBlocked() {
+  guideSearchQuotaBlockedDate = quotaBlockDate();
+  try {
+    sessionStorage.setItem(GUIDE_SEARCH_QUOTA_KEY, guideSearchQuotaBlockedDate);
+  } catch {
+    // The in-memory guard still prevents repeated requests in this tab.
+  }
+}
+
+export function isGoogleGuideSearchQuotaBlocked() {
+  const today = quotaBlockDate();
+  if (guideSearchQuotaBlockedDate === today) return true;
+  guideSearchQuotaBlockedDate = '';
+  try {
+    const blockedDate = sessionStorage.getItem(GUIDE_SEARCH_QUOTA_KEY);
+    if (blockedDate === today) {
+      guideSearchQuotaBlockedDate = today;
+      return true;
+    }
+    if (blockedDate) sessionStorage.removeItem(GUIDE_SEARCH_QUOTA_KEY);
+  } catch {
+    // Continue without persisted state when browser storage is unavailable.
+  }
+  return false;
+}
+
+export function googleGuideSearchErrorMessage(error) {
+  if (error?.code === 'GUIDE_SEARCH_QUOTA_BLOCKED' || isQuotaError(error)) {
+    return 'Google place discovery has reached today’s quota. Your saved guide is still available; try again after the quota resets.';
+  }
+  return 'Google place discovery is unavailable right now. Your saved guide is still available.';
+}
+
+function quotaBlockedError() {
+  const error = new Error('Google place discovery has reached today’s quota.');
+  error.code = 'GUIDE_SEARCH_QUOTA_BLOCKED';
+  return error;
+}
 
 // Ephemeral in-memory and sessionStorage cache for client-side Place details.
 // Compliant with Google Maps Platform Terms of Service: Place IDs can be stored
@@ -56,13 +113,13 @@ export function getCachedPlaceDetails(placeId) {
 export async function fetchGooglePlaceDetails(placesLibrary, placeId) {
   if (!placeId) return null;
   const cached = getCachedPlaceDetails(placeId);
-  if (cached?.name && cached.name !== 'Saved place') return cached;
+  if (cached?.name && cached.name !== 'Saved place' && cached.businessDetailsResolved) return cached;
 
   if (!placesLibrary?.Place) return cached || null;
 
   try {
     const place = new placesLibrary.Place({ id: placeId });
-    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+    await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location', 'editorialSummary', 'primaryTypeDisplayName', 'rating', 'userRatingCount'] });
     const name = (typeof place.displayName === 'string' ? place.displayName : place.displayName?.text)
       || place.formattedAddress
       || '';
@@ -70,8 +127,13 @@ export async function fetchGooglePlaceDetails(placesLibrary, placeId) {
       id: placeId,
       name,
       formattedAddress: place.formattedAddress || '',
+      description: typeof place.editorialSummary === 'string' ? place.editorialSummary : place.editorialSummary?.text || '',
+      type: typeof place.primaryTypeDisplayName === 'string' ? place.primaryTypeDisplayName : place.primaryTypeDisplayName?.text || '',
+      rating: place.rating ?? null,
+      userRatingCount: place.userRatingCount ?? 0,
       latitude: place.location?.lat?.() ?? null,
       longitude: place.location?.lng?.() ?? null,
+      businessDetailsResolved: true,
     };
     cachePlaceDetails(placeId, details);
     return details;
@@ -81,18 +143,28 @@ export async function fetchGooglePlaceDetails(placesLibrary, placeId) {
   }
 }
 
-export async function searchGoogleGuidePlaces(placesLibrary, category, destinationName, center, maxResultCount = 20) {
-  const categoryQuery = CATEGORY_SEARCH[category];
-  if (!placesLibrary?.Place?.searchByText || !categoryQuery || !destinationName || !center) {
+export async function searchGoogleGuidePlaces(placesLibrary, category, destinationName, center, maxResultCount = 20, queryVariant = 0) {
+  const queryVariants = CATEGORY_SEARCH[category];
+  const textQuery = queryVariants?.[queryVariant]?.(destinationName);
+  if (!placesLibrary?.Place?.searchByText || !textQuery || !destinationName || !center) {
     return [];
   }
 
-  const response = await placesLibrary.Place.searchByText({
-    ...categoryQuery(destinationName),
-    locationBias: { center, radius: 20000 },
-    maxResultCount: Math.max(1, Math.min(20, maxResultCount)),
-    fields: GUIDE_PLACE_FIELDS,
-  });
+  if (isGoogleGuideSearchQuotaBlocked()) throw quotaBlockedError();
+
+  let response;
+  try {
+    response = await placesLibrary.Place.searchByText({
+      textQuery,
+      ...(category === 'restaurant' ? { includedType: 'restaurant', useStrictTypeFiltering: true } : {}),
+      locationBias: { center, radius: 20000 },
+      maxResultCount: Math.max(1, Math.min(20, maxResultCount)),
+      fields: GUIDE_PLACE_FIELDS,
+    });
+  } catch (error) {
+    if (isQuotaError(error)) markGuideSearchQuotaBlocked();
+    throw error;
+  }
 
   return (response.places || [])
     .filter((place) => place.id)
@@ -112,6 +184,12 @@ export async function searchGoogleGuidePlaces(placesLibrary, category, destinati
         latitude: place.location?.lat?.(),
         longitude: place.location?.lng?.(),
         formattedAddress,
+        rating: place.rating ?? null,
+        userRatingCount: place.userRatingCount ?? 0,
+        description: '',
+        type: typeof place.primaryTypeDisplayName === 'string'
+          ? place.primaryTypeDisplayName
+          : place.primaryTypeDisplayName?.text || '',
         source: 'Google Maps',
       };
     });
@@ -124,4 +202,3 @@ export async function storeGooglePlaceIds(placeIds) {
   if (!uniqueIds.length) return;
   await apiClient.post('/places/identifiers/google', { placeIds: uniqueIds });
 }
-

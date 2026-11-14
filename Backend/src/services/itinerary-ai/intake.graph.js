@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { generateJson } from '../gemini.service.js';
-import { canGenerateTrip, getNextQuestion, mergeBrief } from './brief.js';
+import { canGenerateTrip, extractDirectBriefPatch, getNextQuestion, mergeBrief } from './brief.js';
 
 const IntakeState = Annotation.Root({
   brief: Annotation(),
@@ -12,7 +12,10 @@ const IntakeState = Annotation.Root({
 function createIntakeGraph(env) {
   const updateBrief = async ({ brief, userMessage }) => {
     const nextQuestion = getNextQuestion(brief);
-    const extraction = await generateJson({
+    const directExtraction = extractDirectBriefPatch(brief, userMessage);
+    const extraction = Object.keys(directExtraction.patch).length > 0
+      ? directExtraction
+      : await generateJson({
       env,
       systemPrompt: `You extract explicit travel details from the user's latest message. Return one JSON object: {"patch":{},"acknowledgement":""}.
 Only include patch keys supported by the latest user message. Never replace existing details unless the user corrects or clears them. Do not invent a destination, date, traveler count, or preference. Dates must be exact YYYY-MM-DD values; for vague timing, put the user's wording in dateFlexibility and leave dates out. Extract traveler type as solo, couple, family, or friends when stated. Extract durationDays as an integer when the user says how many days they want (1–21). Supported keys: destination, origin, travelers:{type:solo|couple|family|friends,adults,childrenAges}, startDate, endDate, durationDays, dateFlexibility, interests, pace, budget, mustSee, avoid, skippedSlots. Only provide travelers.adults when the user explicitly gives an adult/group count; selecting Family or Friends alone is not a count. If the user explicitly skips the currently requested optional detail, set skippedSlots to include its slot id: origin, travelers, dates, or preferences. Keep acknowledgement friendly and short, without asking a question. Do not mention internal tools or hidden reasoning.`,

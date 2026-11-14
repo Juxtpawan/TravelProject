@@ -32,7 +32,7 @@ function LoginForm() {
           autoComplete="username"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
-          className="w-full rounded-lg border border-gray px-3 py-2 text-sm text-pine focus:outline-none focus:ring-2 focus:ring-moss"
+          className="h-12 w-full rounded-xl border border-gray bg-white px-3.5 text-sm text-pine outline-none transition placeholder:text-[#89958e] focus:border-green-medium focus:ring-2 focus:ring-green-medium/20"
           placeholder="you@example.com or NomadExplorer42"
         />
       </div>
@@ -45,7 +45,7 @@ function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-gray px-3 py-2 text-sm text-pine focus:outline-none focus:ring-2 focus:ring-moss"
+          className="h-12 w-full rounded-xl border border-gray bg-white px-3.5 text-sm text-pine outline-none transition placeholder:text-[#89958e] focus:border-green-medium focus:ring-2 focus:ring-green-medium/20"
           placeholder="••••••••"
         />
       </div>
@@ -59,7 +59,7 @@ function LoginForm() {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 rounded-lg bg-pine text-white text-sm font-semibold hover:bg-moss transition-colors disabled:opacity-60 cursor-pointer"
+        className="w-full py-2.5 rounded-lg bg-btn-primary-bg text-btn-primary-text text-sm font-semibold hover:bg-btn-primary-bg-hover transition-colors disabled:opacity-60 cursor-pointer"
       >
         {isLoading ? 'Logging in…' : 'Log in'}
       </button>

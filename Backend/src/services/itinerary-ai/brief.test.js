@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   canGenerateTrip,
   createEmptyBrief,
+  extractDirectBriefPatch,
   getChecklist,
   getNextQuestion,
   mergeBrief,
@@ -157,4 +158,19 @@ test('asks family and friends for their group size before advancing intake', () 
 test('defaults couples to two adults when no count is supplied', () => {
   const brief = mergeBrief(createEmptyBrief(), { travelers: { type: 'couple' } });
   assert.equal(brief.travelers.adults, 2);
+});
+
+test('extracts guided planner responses without an LLM call', () => {
+  const empty = createEmptyBrief();
+  const destination = extractDirectBriefPatch(empty, 'I want to plan a trip to Goa.');
+  assert.deepEqual(destination.patch, { destination: 'Goa' });
+
+  const details = extractDirectBriefPatch({ ...empty, destination: 'Goa' }, 'We are a family of four for 5 days, with food and nature on a budget.');
+  assert.equal(details.patch.durationDays, 5);
+  assert.deepEqual(details.patch.travelers, { type: 'family', adults: 4, countProvided: true });
+  assert.equal(details.patch.budget, 'budget');
+  assert.deepEqual(details.patch.interests, ['nature', 'food']);
+
+  const dates = extractDirectBriefPatch(empty, 'My trip is from 2026-11-01 to 2026-11-05.');
+  assert.deepEqual(dates.patch, { startDate: '2026-11-01', endDate: '2026-11-05' });
 });

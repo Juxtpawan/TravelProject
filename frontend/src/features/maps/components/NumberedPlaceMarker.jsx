@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import { AdvancedMarker } from '@vis.gl/react-google-maps';
 import NumberedPin from './NumberedPin';
 
 /** Shared Advanced Marker wrapper; callers provide normalized coordinates and category styling. */
-export default function NumberedPlaceMarker({ position, title, number, category, selected = false, onClick }) {
+function NumberedPlaceMarker({ position, title, number, category, selected = false, onClick }) {
   return (
     <AdvancedMarker
       position={position}
@@ -14,3 +15,5 @@ export default function NumberedPlaceMarker({ position, title, number, category,
     </AdvancedMarker>
   );
 }
+
+export default memo(NumberedPlaceMarker);

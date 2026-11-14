@@ -1,50 +1,80 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --font-trip-sans: "Manrope", "Segoe UI", sans-serif;
   --font-trip-serif: "Georgia", "Times New Roman", "Century Schoolbook L", serif;
 
   /* ── Brand tokens (Simplified & Intuitive) ───────────────────────── */
-  --color-green: #00eb5b;      /* Bright neon green (Logo) */
-  --color-green-medium: #00d050;     /* Vivid accent green (Brand identity) */
-  --color-pine: #003924;       /* Deep pine green (Primary text contrast) */
+  --color-green: #34e0a1;      /* TripAdvisor TripGreen */
+  --color-green-medium: #00aa6c; /* TripAdvisor Moss accent */
+  --color-green-ink: #004f32;  /* TripAdvisor Pine for readable text */
+  --color-pine: #004f32;
   --color-black: #000000;            /* Pure Black */
-  --color-sand: #FAF1ED;             /* Warm tinted off-white (Hero backgrounds) */
-  --color-gray: #F2F2F2;       /* Light utility gray (Borders and dividers) */
-  --color-off-white: #F8F9FA;          /* Clean off-white app background */
-  --color-gold: #F5A623;             /* Warm rating amber yellow (Stars) */
-  --color-green-deep: #002b11;       /* Rich deep forest shadow green */
+  --color-sand: #faf1ed;        /* TripAdvisor Sand */
+  --color-gray: #e6eee9;
+  --color-off-white: #f8faf8;
+  --color-gold: #f2b203;        /* TripAdvisor Mustard */
+  --color-green-deep: #004f32;
   --color-red: #DF1B12;              /* Clean error and destructive red */
 
   /* ── Semantic mapping tokens ─────────────────────────── */
   --color-bg-page: var(--color-off-white);
   --color-bg-surface: #FFFFFF;
-  --color-bg-subtle: var(--color-sand);
+  --color-bg-subtle: #eef8f3;
 
-  --color-text-primary: var(--color-pine);
-  --color-text-secondary: color-mix(in srgb, var(--color-pine) 70%, white);
+  --color-text-primary: #1d3027;
+  --color-text-secondary: #64756c;
   --color-text-inverse: #FFFFFF;
-  --color-text-link: var(--color-pine);
+  --color-text-link: #004f32;
 
   --color-border-default: var(--color-gray);
-  --color-border-strong: #D8DCDA;
+  --color-border-strong: #d5e3da;
 
   --color-btn-primary-bg: #00eb5b;
-  --color-btn-primary-bg-hover: #00d050;
-  --color-btn-primary-text: var(--color-pine);
+  --color-btn-primary-bg-hover: #00cc50;
+  --color-btn-primary-text: #004f32;
 
   --color-btn-secondary-bg: transparent;
-  --color-btn-secondary-border: var(--color-pine);
+  --color-btn-secondary-border: #c9dcd1;
   --color-btn-secondary-text: var(--color-pine);
   --color-btn-secondary-bg-hover: var(--color-gray);
 
-  --color-badge-bg: color-mix(in srgb, var(--color-green) 18%, white);
-  --color-badge-text: var(--color-pine);
+  --color-badge-bg: #e7f7ef;
+  --color-badge-text: #004f32;
   --color-rating-star: var(--color-gold);
 }
 
-@theme {
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-green-medium: #34e0a1;
+  --color-green-ink: #8ce6c1;
+  --color-pine: #edf5ef;
+  --color-sand: #18231e;
+  --color-gray: #2b3932;
+  --color-off-white: #111a16;
+  --color-bg-page: #111a16;
+  --color-bg-surface: #19241e;
+  --color-bg-subtle: #202e26;
+  --color-text-primary: #edf4ee;
+  --color-text-secondary: #afbeb4;
+  --color-text-inverse: #ffffff;
+  --color-text-link: #72d5af;
+  --color-border-default: #304038;
+  --color-border-strong: #43534a;
+  --color-btn-primary-bg: #00eb5b;
+  --color-btn-primary-bg-hover: #00cc50;
+  --color-btn-secondary-border: #43534a;
+  --color-btn-secondary-text: var(--color-pine);
+  --color-btn-secondary-bg-hover: #26352d;
+  --color-badge-bg: #1d4032;
+  --color-badge-text: #8be0ba;
+  --color-rating-star: #ffc24d;
+}
+
+@theme inline {
   /* ── System Font Overrides ───────────────────────────── */
   --font-sans: var(--font-trip-sans);
   --font-serif: var(--font-trip-serif);
@@ -52,6 +82,7 @@
   /* ── Simplified Color Palette Registries ───────────────── */
   --color-green: var(--color-green);
   --color-green-medium: var(--color-green-medium);
+  --color-green-ink: var(--color-green-ink);
   --color-pine: var(--color-pine);
   --color-black: var(--color-black);
   --color-sand: var(--color-sand);
@@ -130,6 +161,174 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  min-height: 100%;
+  background: var(--color-bg-page);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+body {
+  min-height: 100vh;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+::selection {
+  color: #ffffff;
+  background: #004f32;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-green-medium) 55%, transparent);
+  outline-offset: 2px;
+}
+
+input[aria-label^="Search"]:focus-visible,
+textarea[aria-label^="Search"]:focus-visible,
+input[placeholder^="Search "]:focus-visible,
+textarea[placeholder^="Search "]:focus-visible {
+  outline: none !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  a[href] {
+    transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.985);
+  }
+}
+
+/* Light-color utility compatibility for components that still use explicit
+   neutral Tailwind colors. The green brand/button tokens above are untouched. */
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] [class~="bg-white/95"],
+:root[data-theme="dark"] [class~="bg-white/90"],
+:root[data-theme="dark"] [class~="bg-white/80"],
+:root[data-theme="dark"] .bg-slate-50,
+:root[data-theme="dark"] .bg-slate-100,
+:root[data-theme="dark"] .bg-slate-200,
+:root[data-theme="dark"] [class*="bg-[#f"],
+:root[data-theme="dark"] [class*="bg-[#e"],
+:root[data-theme="dark"] [class*="bg-[#d"] {
+  background-color: var(--color-bg-surface) !important;
+}
+
+:root[data-theme="dark"] [class*="bg-[#f"],
+:root[data-theme="dark"] [class*="bg-[#e"] {
+  background-color: var(--color-bg-subtle) !important;
+}
+
+:root[data-theme="dark"] .bg-red-50,
+:root[data-theme="dark"] .bg-red-50\/40,
+:root[data-theme="dark"] .bg-red-100,
+:root[data-theme="dark"] .bg-rose-50 {
+  background-color: #382522 !important;
+}
+
+:root[data-theme="dark"] .bg-amber-50,
+:root[data-theme="dark"] .bg-yellow-50 {
+  background-color: #382f1d !important;
+}
+
+:root[data-theme="dark"] [class*="from-[#f"],
+:root[data-theme="dark"] [class*="via-white"],
+:root[data-theme="dark"] [class*="to-white"] {
+  background-image: linear-gradient(120deg, #1b2922, #202e26 55%, #26342b) !important;
+}
+
+:root[data-theme="dark"] .border-white,
+:root[data-theme="dark"] [class*="border-[#e"],
+:root[data-theme="dark"] [class*="border-[#d"] {
+  border-color: var(--color-border-default) !important;
+}
+
+:root[data-theme="dark"] .border-slate-100,
+:root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-gray-100,
+:root[data-theme="dark"] .border-gray-200 {
+  border-color: var(--color-border-default) !important;
+}
+
+:root[data-theme="dark"] .text-slate-500,
+:root[data-theme="dark"] .text-slate-600,
+:root[data-theme="dark"] .text-slate-700,
+:root[data-theme="dark"] [class~="text-[#526158]"],
+:root[data-theme="dark"] [class~="text-[#56655c]"],
+:root[data-theme="dark"] [class~="text-[#56645b]"],
+:root[data-theme="dark"] [class~="text-[#59675e]"],
+:root[data-theme="dark"] [class~="text-[#627268]"],
+:root[data-theme="dark"] [class~="text-[#647169]"],
+:root[data-theme="dark"] [class~="text-[#66736b]"],
+:root[data-theme="dark"] [class~="text-[#66766b]"],
+:root[data-theme="dark"] [class~="text-[#68756f]"],
+:root[data-theme="dark"] [class~="text-[#68766e]"],
+:root[data-theme="dark"] [class~="text-[#718077]"],
+:root[data-theme="dark"] [class~="text-[#738078]"],
+:root[data-theme="dark"] [class~="text-[#748078]"],
+:root[data-theme="dark"] [class~="text-[#75847b]"],
+:root[data-theme="dark"] [class~="text-[#78867d]"],
+:root[data-theme="dark"] [class~="text-[#7a8980]"],
+:root[data-theme="dark"] [class~="text-[#7b8580]"],
+:root[data-theme="dark"] [class~="text-[#7b877f]"],
+:root[data-theme="dark"] [class~="text-[#7b8980]"],
+:root[data-theme="dark"] [class~="text-[#85948a]"],
+:root[data-theme="dark"] [class~="text-[#87958b]"],
+:root[data-theme="dark"] [class~="text-[#8a968f]"],
+:root[data-theme="dark"] [class~="text-[#8a9a8e]"],
+:root[data-theme="dark"] [class~="text-[#89958e]"],
+:root[data-theme="dark"] [class~="text-[#9aa79d]"] {
+  color: var(--color-text-secondary) !important;
+}
+
+:root[data-theme="dark"] [class~="text-[#26352f]"],
+:root[data-theme="dark"] [class~="text-[#26382e]"],
+:root[data-theme="dark"] [class~="text-[#263a30]"],
+:root[data-theme="dark"] [class~="text-[#35433d]"],
+:root[data-theme="dark"] [class~="text-[#35443b]"],
+:root[data-theme="dark"] [class~="text-[#405047]"],
+:root[data-theme="dark"] [class~="text-[#073d2d]"] {
+  color: var(--color-text-primary) !important;
+}
+
+:root[data-theme="dark"] [class~="text-[#087b5d]"],
+:root[data-theme="dark"] [class~="text-[#17633f]"],
+:root[data-theme="dark"] [class~="text-[#007d5b]"],
+:root[data-theme="dark"] [class~="text-[#159b72]"],
+:root[data-theme="dark"] [class~="text-[#287344]"] {
+  color: #75d6ae !important;
+}
+
+:root[data-theme="dark"] [class~="text-[#9b3e32]"],
+:root[data-theme="dark"] [class~="text-[#9b3e3b]"],
+:root[data-theme="dark"] [class~="text-[#a13a31]"] {
+  color: #ff9c8d !important;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #91a197;
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .shadow-sm,
+:root[data-theme="dark"] .shadow-md,
+:root[data-theme="dark"] .shadow-lg,
+:root[data-theme="dark"] .shadow-xl {
+  --tw-shadow-color: rgb(0 0 0 / 0.24);
+}
+
 /* ── 4. CUSTOM UTILITIES LAYER ────────────────────────── */
 @utility app-container {
   width: 100%;
@@ -147,5 +346,19 @@ html, body {
   @media (min-width: 1024px) {
     padding-left: 2rem;
     padding-right: 2rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .home-hero,
+  .home-hero-content,
+  .explore-hero,
+  .explore-hero-content {
+    min-height: 0;
+  }
+
+  .home-hero-content,
+  .explore-hero-content {
+    padding-block: 1.5rem;
   }
 }

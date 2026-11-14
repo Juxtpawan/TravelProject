@@ -73,7 +73,7 @@ export default function useWishlist() {
   const currentState = stateStorageKey === storageKey ? state : fallbackState;
   const currentSyncStatus = userId && stateStorageKey !== storageKey ? 'loading' : syncStatus;
   const stateRef = useRef(currentState);
-  stateRef.current = currentState;
+  useEffect(() => { stateRef.current = currentState; }, [currentState]);
 
   useEffect(() => {
     const refresh = (event) => {
@@ -106,10 +106,13 @@ export default function useWishlist() {
     const cachedState = userId
       ? readWishlists(storageKey)
       : { lists: [{ id: DEFAULT_WISHLIST_ID, name: 'Want to go', items: [] }], activeListId: DEFAULT_WISHLIST_ID };
-    stateRef.current = cachedState;
-    setState(cachedState);
-    setStateStorageKey(storageKey);
-    setSyncStatus(userId ? 'loading' : 'guest');
+    queueMicrotask(() => {
+      if (!active) return;
+      stateRef.current = cachedState;
+      setState(cachedState);
+      setStateStorageKey(storageKey);
+      setSyncStatus(userId ? 'loading' : 'guest');
+    });
     if (!userId) return () => { active = false; };
 
     let guestState = null;
@@ -236,7 +239,7 @@ export default function useWishlist() {
   const lists = currentState.lists.length ? currentState.lists : fallbackState.lists;
   const defaultList = lists.find((list) => list.id === DEFAULT_WISHLIST_ID) || lists[0];
   const activeList = lists.find((list) => list.id === currentState.activeListId) || lists[0];
-  const hasPlaceInList = useCallback((listId, place, destinationSlug) => {
+  const hasPlaceInList = useCallback((listId, place) => {
     const placeId = String(place.id || place.google_place_id || place.name);
     return lists.find((list) => list.id === listId)?.items.some((item) =>
       item.id === placeId && item.provider === (place.provider === 'google' || place.google_place_id || place.googlePlaceId || place.source === 'Google Maps' ? 'google' : 'app'),

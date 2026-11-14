@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, MapPin, Search } from 'lucide-react';
+import GoogleMapsAttribution from '../../../shared/components/google-maps-attribution/GoogleMapsAttribution';
 import { autocompleteDestinations, getDestinationPlaceDetails, lookupDestination, resolveDestination, startDestinationDiscovery } from '../api/placesApi';
 
 function getPredictionLabel(prediction, fallback = '') {
@@ -20,7 +21,6 @@ export default function DestinationSearch({ onSearch }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const sessionToken = useRef(null);
-  const searchQuery = useRef('');
   const input = query.trim();
   const suggestions = suggestionState.query === input ? suggestionState.items : [];
   const autocompleteLoading = input.length >= 3 && !selected
@@ -38,7 +38,6 @@ export default function DestinationSearch({ onSearch }) {
       if (active) setSuggestionState({ query: input, status: 'loading', items: [] });
       try {
         if (!sessionToken.current) sessionToken.current = crypto.randomUUID();
-        searchQuery.current = input;
         const response = await autocompleteDestinations(input, sessionToken.current);
         if (active) setSuggestionState({ query: input, status: 'loaded', items: response.suggestions || [] });
       } catch (requestError) {
@@ -72,7 +71,7 @@ export default function DestinationSearch({ onSearch }) {
     try {
       const place = await getDestinationPlaceDetails(prediction.placeId, token);
       const destination = await resolveDestination(
-        searchQuery.current || input,
+        prediction.mainText?.trim() || selectedLabel,
         place.placeId || prediction.placeId,
         place.location || undefined
       );
@@ -92,7 +91,10 @@ export default function DestinationSearch({ onSearch }) {
 
     try {
       const cached = await lookupDestination(query.trim());
-      if (cached.destination) {
+      // Very short input can be a prefix accidentally persisted from an older
+      // autocomplete bug (for example, typing "man" and choosing Manchester).
+      // Require the user to choose a current Places suggestion for these queries.
+      if (cached.destination && query.trim().length > 3) {
         openSavedDestination(cached.destination);
         return;
       }
@@ -118,7 +120,6 @@ export default function DestinationSearch({ onSearch }) {
     setSelected(null);
     setError('');
     if (!value.trim()) {
-      searchQuery.current = '';
       sessionToken.current = null;
     }
   };
@@ -127,7 +128,7 @@ export default function DestinationSearch({ onSearch }) {
   const hasSuggestions = suggestions.length > 0;
 
   return (
-    <form onSubmit={submit} className="relative flex w-full items-center gap-2">
+    <form onSubmit={submit} className="relative flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center">
       <div className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-lg border border-[#d7dfd9] bg-white px-4 transition focus-within:border-green-medium focus-within:ring-2 focus-within:ring-green-medium/15">
         {loading || autocompleteLoading ? <LoaderCircle size={19} className="shrink-0 animate-spin text-pine" /> : <Search size={19} className="shrink-0 text-[#56655c]" />}
         <input
@@ -136,7 +137,7 @@ export default function DestinationSearch({ onSearch }) {
           onChange={(event) => updateQuery(event.target.value)}
           placeholder="Search destinations, countries, regions"
           autoComplete="off"
-          className="min-w-0 flex-grow bg-transparent text-sm text-pine outline-none placeholder:text-[#7b8980]"
+          className="min-w-0 flex-grow bg-transparent text-sm text-pine outline-none focus-visible:outline-none placeholder:text-[#7b8980]"
           aria-label="Search destinations"
           aria-autocomplete="list"
           aria-expanded={showDropdown && (hasSuggestions || autocompleteLoading)}
@@ -145,12 +146,12 @@ export default function DestinationSearch({ onSearch }) {
       <button
         type="submit"
         disabled={query.trim().length < 2 || loading || (autocompleteLoading && !selected)}
-        className="inline-flex h-14 shrink-0 items-center gap-2 rounded-lg bg-btn-primary-bg px-5 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover disabled:cursor-not-allowed disabled:opacity-100 disabled:hover:bg-btn-primary-bg"
+        className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-btn-primary-bg px-5 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover disabled:cursor-not-allowed disabled:opacity-100 disabled:hover:bg-btn-primary-bg sm:h-14 sm:w-auto"
       >
         {loading ? 'Searching…' : <><Search size={16} /> Search</>}
       </button>
 
-      {showDropdown && <ul className="app-scrollbar absolute left-0 right-28 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)]" role="listbox">
+      {showDropdown && <ul className="app-scrollbar absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(18rem,45vh)] overflow-y-auto rounded-lg border border-[#e3e9e5] bg-white py-1 shadow-[0_14px_40px_rgba(18,44,32,0.16)] sm:right-28" role="listbox">
         {suggestions.map((prediction) => (
           <li key={prediction.placeId}>
           <button type="button" onClick={() => chooseSuggestion(prediction)} disabled={loading} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-pine hover:bg-[#f5faf6] disabled:cursor-wait disabled:opacity-70">
@@ -162,10 +163,10 @@ export default function DestinationSearch({ onSearch }) {
         {!hasSuggestions && <li className="px-4 py-3 text-sm text-[#68766e]">
           {autocompleteLoading ? 'Searching Google destinations…' : autocompleteFailed ? 'Google suggestions are unavailable. Check your connection and Places API settings.' : 'No Google suggestions yet. Keep typing or try another spelling.'}
         </li>}
-      {hasSuggestions && <li translate="no" className="border-t border-[#edf1ed] px-4 py-1.5 text-right text-xs font-normal text-[#5e5e5e]">Google Maps</li>}
+      {hasSuggestions && <li className="border-t border-[#edf1ed] px-4 py-1.5 text-right"><GoogleMapsAttribution /></li>}
       </ul>}
 
-      {error && <p role="alert" className="absolute left-3 right-28 top-full z-40 mt-2 rounded-lg bg-white px-4 py-3 text-sm text-[#9b3e32] shadow">{error}</p>}
+      {error && <p role="alert" className="absolute left-0 right-0 top-full z-40 mt-2 rounded-lg bg-white px-4 py-3 text-sm text-[#9b3e32] shadow sm:left-3 sm:right-28">{error}</p>}
     </form>
   );
 }

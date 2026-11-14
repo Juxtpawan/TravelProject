@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'node:crypto';
 import { d1Query } from '../db/client.js';
 import { purgeExpiredGoogleDestinationCoordinates, saveGooglePlaceIdentifiers } from '../features/places/placeIdentity.repository.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
@@ -82,9 +83,8 @@ router.post('/details', async (req, res) => {
   try {
     const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`);
     if (sessionToken) url.searchParams.set('sessionToken', sessionToken);
-    // Location is a Place Details Essentials field. Keep displayName out of
-    // this session-ending request; the selected prediction already supplies
-    // the transient label for the current user interaction.
+    // Google Place Details supplies the selected Autocomplete result's exact
+    // coordinates; the photo lookup uses them for Commons geosearch.
     const response = await fetch(url, { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'id,location' } });
     if (!response.ok) {
       const failure = await response.json().catch(() => ({}));
@@ -127,6 +127,7 @@ router.get('/', async (_req, res) => {
   try {
     const destinations = await d1Query(
       `SELECT d.id, d.name, d.slug, d.country, d.state, d.description, d.google_place_id,
+              d.latitude, d.longitude,
               COUNT(p.id) AS places_count
        FROM destinations d
        LEFT JOIN places p ON p.destination_id = d.id
@@ -141,6 +142,102 @@ router.get('/', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching destinations:', error);
     res.status(500).json({ error: 'Failed to fetch destinations' });
+  }
+});
+
+const userPhotoTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const userPhotoLimit = 8 * 1024 * 1024;
+const userPhotoCountLimit = 12;
+
+function imageSignatureMatches(bytes, contentType) {
+  if (!Buffer.isBuffer(bytes)) return false;
+  if (contentType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (contentType === 'image/png') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (contentType === 'image/webp') return bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+  return false;
+}
+
+// User photos are private to the uploader and stored separately from sourced place imagery.
+router.get('/:placeId/photos', authMiddleware, async (req, res) => {
+  const placeId = String(req.params.placeId || '').trim();
+  if (!placeId || placeId.length > 4096) return res.status(400).json({ error: 'Invalid place ID.' });
+  try {
+    const photos = await d1Query(
+      `SELECT id, content_type, byte_size, created_at FROM place_user_photos
+       WHERE user_id = ? AND place_id = ? ORDER BY created_at DESC LIMIT ?`,
+      [req.user.id, placeId, userPhotoCountLimit],
+    );
+    res.json({ photos: photos.map((photo) => ({
+      ...photo,
+      url: `/places/${encodeURIComponent(placeId)}/photos/${encodeURIComponent(photo.id)}/file`,
+    })) });
+  } catch (error) {
+    console.error('[Place photos] Could not list uploaded photos:', error?.message || error);
+    res.status(500).json({ error: 'Could not load your place photos.' });
+  }
+});
+
+router.post('/:placeId/photos', authMiddleware, express.raw({ type: '*/*', limit: userPhotoLimit }), async (req, res) => {
+  const placeId = String(req.params.placeId || '').trim();
+  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const bytes = req.body;
+  if (!placeId || placeId.length > 4096) return res.status(400).json({ error: 'Invalid place ID.' });
+  if (!userPhotoTypes.has(contentType)) return res.status(415).json({ error: 'Upload a JPEG, PNG, or WebP photo.' });
+  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > userPhotoLimit) return res.status(413).json({ error: 'Photos must be smaller than 8 MB.' });
+  if (!imageSignatureMatches(bytes, contentType)) return res.status(400).json({ error: 'The selected file is not a valid image.' });
+  const bucket = req.cloudflare?.env?.BUCKET;
+  if (!bucket) return res.status(503).json({ error: 'Photo storage is not configured.' });
+
+  let objectKey;
+  try {
+    const [{ count }] = await d1Query(
+      'SELECT COUNT(*) AS count FROM place_user_photos WHERE user_id = ? AND place_id = ?',
+      [req.user.id, placeId],
+    );
+    if (Number(count) >= userPhotoCountLimit) return res.status(409).json({ error: `You can add up to ${userPhotoCountLimit} photos per place.` });
+
+    const id = randomUUID();
+    objectKey = `user-place-photos/${req.user.id}/${id}`;
+    await bucket.put(objectKey, bytes, { httpMetadata: { contentType } });
+    const createdAt = new Date().toISOString();
+    await d1Query(
+      `INSERT INTO place_user_photos (id, user_id, place_id, object_key, content_type, byte_size, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, req.user.id, placeId, objectKey, contentType, bytes.length, createdAt],
+    );
+    return res.status(201).json({ photo: {
+      id,
+      content_type: contentType,
+      byte_size: bytes.length,
+      created_at: createdAt,
+      url: `/places/${encodeURIComponent(placeId)}/photos/${encodeURIComponent(id)}/file`,
+    } });
+  } catch (error) {
+    if (objectKey) await bucket.delete(objectKey).catch(() => {});
+    console.error('[Place photos] Upload failed:', error?.message || error);
+    return res.status(500).json({ error: 'Could not upload this photo.' });
+  }
+});
+
+router.get('/:placeId/photos/:photoId/file', authMiddleware, async (req, res) => {
+  const bucket = req.cloudflare?.env?.BUCKET;
+  if (!bucket) return res.status(503).end();
+  try {
+    const [photo] = await d1Query(
+      `SELECT object_key, content_type FROM place_user_photos
+       WHERE id = ? AND user_id = ? AND place_id = ? LIMIT 1`,
+      [req.params.photoId, req.user.id, req.params.placeId],
+    );
+    if (!photo) return res.status(404).end();
+    const object = await bucket.get(photo.object_key);
+    if (!object) return res.status(404).end();
+    res.set('Content-Type', photo.content_type);
+    res.set('Cache-Control', 'private, max-age=300');
+    res.set('X-Content-Type-Options', 'nosniff');
+    return res.end(new Uint8Array(await object.arrayBuffer()));
+  } catch (error) {
+    console.error('[Place photos] Could not read uploaded photo:', error?.message || error);
+    return res.status(500).end();
   }
 });
 

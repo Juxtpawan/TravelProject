@@ -14,6 +14,7 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   const { query, destinationSlug } = req.body;
+  const requestedCategory = ['attraction', 'restaurant'].includes(req.body?.category) ? req.body.category : '';
 
   if (!query || query.trim().length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
@@ -24,7 +25,7 @@ router.post('/', async (req, res) => {
 
     // ── AI intent extraction (when Gemini is available) ──────────────────────
     try {
-      const intent = await generateJson({
+      const intent = req.body?.fast === true ? null : await generateJson({
         env: req.cloudflare?.env,
         systemPrompt: `Extract search intent from a travel query. Return ONLY a JSON object with:
             { "category": "attraction|restaurant|hotel|bar|shop|activity|null", "keywords": ["word1","word2"] }`,
@@ -47,9 +48,12 @@ router.post('/', async (req, res) => {
           sql += ' AND d.slug = ?';
           params.push(destinationSlug);
         }
-        if (category && category !== 'null') {
+        const filterCategory = requestedCategory || (category && category !== 'null' ? category : '');
+        if (filterCategory === 'restaurant') {
+          sql += " AND lower(p.category) IN ('restaurant', 'cafe', 'bar')";
+        } else if (filterCategory) {
           sql += ' AND p.category = ?';
-          params.push(category);
+          params.push(filterCategory);
         }
         if (keywords.length > 0) {
           const kwConditions = keywords.map(() => 'p.name LIKE ?').join(' OR ');
@@ -66,8 +70,8 @@ router.post('/', async (req, res) => {
     // ── Fallback: SQL LIKE search ────────────────────────────────────────────
     if (results.length === 0) {
       const terms = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-      const conditions = terms.map(() => 'LOWER(p.name) LIKE ?').join(' OR ');
-      const params = terms.map(t => `%${t}%`);
+      const conditions = terms.map(() => '(LOWER(p.name) LIKE ? OR LOWER(p.category) LIKE ?)').join(' OR ');
+      const params = terms.flatMap(t => [`%${t}%`, `%${t}%`]);
 
       let sql = `
         SELECT p.*, d.name as destination_name, d.slug as destination_slug
@@ -78,6 +82,13 @@ router.post('/', async (req, res) => {
       if (destinationSlug) {
         sql += ' AND d.slug = ?';
         params.push(destinationSlug);
+      }
+      if (requestedCategory) {
+        if (requestedCategory === 'restaurant') sql += " AND lower(p.category) IN ('restaurant', 'cafe', 'bar')";
+        else {
+          sql += ' AND lower(p.category) = ?';
+          params.push(requestedCategory);
+        }
       }
       sql += ' LIMIT 20';
 

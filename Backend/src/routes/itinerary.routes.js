@@ -10,7 +10,7 @@ router.use(authMiddleware);
 router.get('/:tripId', async (req, res) => {
   const { tripId } = req.params;
   try {
-    const [ownedTrip] = await d1Query('SELECT id FROM trips WHERE id = ? AND user_id = ?', [tripId, req.user.id]);
+    const [ownedTrip] = await d1Query(`SELECT t.id FROM trips t WHERE t.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.status = 'accepted'))`, [tripId, req.user.id, req.user.id]);
     if (!ownedTrip) return res.status(404).json({ error: 'Trip not found' });
 
     const items = await d1Query(
@@ -40,8 +40,8 @@ router.post('/:tripId/optimize-day', async (req, res) => {
 
   try {
     const [trip] = await d1Query(
-      'SELECT id, start_date, end_date FROM trips WHERE id = ? AND user_id = ?',
-      [tripId, req.user.id]
+      `SELECT t.id, t.start_date, t.end_date FROM trips t WHERE t.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted'))`,
+      [tripId, req.user.id, req.user.id]
     );
     if (!trip) return res.status(404).json({ error: 'Trip not found.' });
     const dayCount = Math.floor((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1;
@@ -88,11 +88,19 @@ router.post('/:tripId/optimize-day', async (req, res) => {
 // POST /itinerary/:tripId - Add a new place to the itinerary
 router.post('/:tripId', async (req, res) => {
   const { tripId } = req.params;
-  const { placeId, dayIndex, orderIndex, startTime, endTime, note } = req.body;
+  let { placeId } = req.body;
+  const { googlePlace, dayIndex, orderIndex, startTime, endTime, note } = req.body;
 
-  if (typeof placeId !== 'string' || !Number.isInteger(dayIndex) || dayIndex < 0
+  if ((!googlePlace && typeof placeId !== 'string') || !Number.isInteger(dayIndex) || dayIndex < 0
       || !Number.isInteger(orderIndex) || orderIndex < 0) {
-    return res.status(400).json({ error: 'A placeId, non-negative dayIndex, and non-negative orderIndex are required.' });
+    return res.status(400).json({ error: 'A place, non-negative dayIndex, and non-negative orderIndex are required.' });
+  }
+  if (googlePlace && (typeof googlePlace.googlePlaceId !== 'string' || !googlePlace.googlePlaceId.trim() || googlePlace.googlePlaceId.length > 4096
+      || typeof googlePlace.name !== 'string' || !googlePlace.name.trim() || googlePlace.name.length > 200
+      || (googlePlace.category && typeof googlePlace.category !== 'string')
+      || !Number.isFinite(Number(googlePlace.latitude)) || Number(googlePlace.latitude) < -90 || Number(googlePlace.latitude) > 90
+      || !Number.isFinite(Number(googlePlace.longitude)) || Number(googlePlace.longitude) < -180 || Number(googlePlace.longitude) > 180)) {
+    return res.status(400).json({ error: 'Google place name, ID, and coordinates are required.' });
   }
   if ((startTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime))
       || (endTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime))
@@ -105,11 +113,29 @@ router.post('/:tripId', async (req, res) => {
 
   try {
     const [matchingTripPlace] = await d1Query(
-      `SELECT t.id, t.start_date, t.end_date FROM trips t JOIN places p ON p.destination_id = t.destination_id
-       WHERE t.id = ? AND t.user_id = ? AND p.id = ?`,
-      [tripId, req.user.id, placeId]
+      `SELECT t.id, t.destination_id, t.start_date, t.end_date FROM trips t
+       WHERE t.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted'))`,
+      [tripId, req.user.id, req.user.id]
     );
-    if (!matchingTripPlace) return res.status(404).json({ error: 'Trip or destination place not found' });
+    if (!matchingTripPlace) return res.status(404).json({ error: 'Trip not found.' });
+    if (googlePlace) {
+      const googleId = googlePlace.googlePlaceId.trim();
+      const [existingPlace] = await d1Query('SELECT id FROM places WHERE google_place_id = ? AND destination_id = ? LIMIT 1', [googleId, matchingTripPlace.destination_id]);
+      placeId = existingPlace?.id;
+      if (!placeId) {
+        placeId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        await d1Query(
+          `INSERT INTO places (id, destination_id, name, category, latitude, longitude, google_place_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [placeId, matchingTripPlace.destination_id, googlePlace.name.trim(), googlePlace.category || 'attraction',
+            Number(googlePlace.latitude), Number(googlePlace.longitude), googleId, now, now]
+        );
+      }
+    } else {
+      const [matchingPlace] = await d1Query('SELECT id FROM places WHERE id = ? AND destination_id = ? LIMIT 1', [placeId, matchingTripPlace.destination_id]);
+      if (!matchingPlace) return res.status(404).json({ error: 'Destination place not found.' });
+    }
     const dayCount = Math.floor((Date.parse(`${matchingTripPlace.end_date}T00:00:00Z`) - Date.parse(`${matchingTripPlace.start_date}T00:00:00Z`)) / 86400000) + 1;
     if (dayIndex >= dayCount) return res.status(400).json({ error: 'dayIndex falls outside the trip dates.' });
 
@@ -127,27 +153,59 @@ router.post('/:tripId', async (req, res) => {
 
 router.patch('/:tripId/item/:itemId', async (req, res) => {
   const { tripId, itemId } = req.params;
+  const body = req.body || {};
   const hasPlaceId = Object.hasOwn(req.body || {}, 'placeId');
+  const hasDayIndex = Object.hasOwn(body, 'dayIndex');
   const hasStartTime = Object.hasOwn(req.body || {}, 'startTime');
+  const hasEndTime = Object.hasOwn(body, 'endTime');
+  const hasNote = Object.hasOwn(body, 'note');
+  const hasVisitedAt = Object.hasOwn(body, 'visitedAt');
+  const hasEstimatedCost = Object.hasOwn(body, 'estimatedCost');
+  const hasCostCurrency = Object.hasOwn(body, 'costCurrency');
+  const hasBookingUrl = Object.hasOwn(body, 'bookingUrl');
+  const hasPhotoUrl = Object.hasOwn(body, 'photoUrl');
   const placeId = req.body?.placeId;
+  const dayIndex = Number(body.dayIndex);
   const startTime = req.body?.startTime;
+  const endTime = body.endTime;
+  const note = body.note;
 
-  if ((!hasPlaceId && !hasStartTime)
+  const visitedAt = body.visitedAt;
+  const estimatedCost = body.estimatedCost;
+  const costCurrency = body.costCurrency;
+  const bookingUrl = body.bookingUrl;
+  const photoUrl = body.photoUrl;
+
+  if ((!hasPlaceId && !hasDayIndex && !hasStartTime && !hasEndTime && !hasNote && !hasVisitedAt && !hasEstimatedCost && !hasCostCurrency && !hasBookingUrl && !hasPhotoUrl)
       || (hasPlaceId && (typeof placeId !== 'string' || !placeId.trim()))
+      || (hasDayIndex && (!Number.isInteger(dayIndex) || dayIndex < 0))
       || (hasStartTime && typeof startTime !== 'string' && startTime !== null)
-      || (typeof startTime === 'string' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime))) {
-    return res.status(400).json({ error: 'Provide a valid replacement place or start time.' });
+      || (hasEndTime && typeof endTime !== 'string' && endTime !== null)
+      || (hasNote && (typeof note !== 'string' || note.length > 1000))
+      || (hasVisitedAt && visitedAt !== null && (typeof visitedAt !== 'string' || Number.isNaN(Date.parse(visitedAt))))
+      || (hasEstimatedCost && (typeof estimatedCost !== 'string' || (estimatedCost && (!/^\d+(\.\d{1,2})?$/.test(estimatedCost) || Number(estimatedCost) > 100000000))))
+      || (hasCostCurrency && (typeof costCurrency !== 'string' || !/^[A-Z]{3}$/.test(costCurrency)))
+      || (hasBookingUrl && (typeof bookingUrl !== 'string' || bookingUrl.length > 1000 || (bookingUrl && !/^https?:\/\//i.test(bookingUrl))))
+      || (hasPhotoUrl && (typeof photoUrl !== 'string' || photoUrl.length > 2000 || (photoUrl && !/^https?:\/\//i.test(photoUrl))))
+      || (typeof startTime === 'string' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime))
+      || (typeof endTime === 'string' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime))) {
+    return res.status(400).json({ error: 'Provide valid place, day, times, and notes.' });
   }
 
   try {
     const [current] = await d1Query(
-      `SELECT i.id, i.place_id, i.day_index, i.order_index, i.start_time, i.end_time, i.note,
-              t.destination_id
+      `SELECT i.id, i.place_id, i.day_index, i.order_index, i.start_time, i.end_time, i.note, i.visited_at, i.estimated_cost, i.cost_currency, i.booking_url,
+              t.destination_id, t.start_date, t.end_date
        FROM itinerary_items i JOIN trips t ON t.id = i.trip_id
-       WHERE i.id = ? AND i.trip_id = ? AND t.user_id = ? LIMIT 1`,
-      [itemId, tripId, req.user.id]
+       WHERE i.id = ? AND i.trip_id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted')) LIMIT 1`,
+      [itemId, tripId, req.user.id, req.user.id]
     );
     if (!current) return res.status(404).json({ error: 'Itinerary stop not found.' });
+
+    const dayCount = Math.floor((Date.parse(`${current.end_date}T00:00:00Z`) - Date.parse(`${current.start_date}T00:00:00Z`)) / 86400000) + 1;
+    if (hasDayIndex && dayIndex >= dayCount) {
+      return res.status(400).json({ error: 'Choose a day within this trip.' });
+    }
 
     let nextPlaceId = current.place_id;
     if (hasPlaceId) {
@@ -158,14 +216,36 @@ router.patch('/:tripId/item/:itemId', async (req, res) => {
       if (!place) return res.status(400).json({ error: 'Choose a place from this trip destination.' });
       nextPlaceId = place.id;
     }
+    const nextDayIndex = hasDayIndex ? dayIndex : current.day_index;
     const nextStartTime = hasStartTime ? startTime : current.start_time;
-    if (current.end_time && nextStartTime && current.end_time <= nextStartTime) {
+    const nextEndTime = hasEndTime ? endTime : current.end_time;
+    const nextNote = hasNote ? note.trim() : current.note;
+    const nextVisitedAt = hasVisitedAt ? visitedAt : current.visited_at;
+    const nextEstimatedCost = hasEstimatedCost ? estimatedCost : current.estimated_cost;
+    const nextCostCurrency = hasCostCurrency ? costCurrency : current.cost_currency;
+    const nextBookingUrl = hasBookingUrl ? bookingUrl.trim() : current.booking_url;
+    const nextPhotoUrl = hasPhotoUrl ? photoUrl.trim() : current.photo_url;
+    if (nextEndTime && !nextStartTime) {
+      return res.status(400).json({ error: 'Add a start time before the end time.' });
+    }
+    if (nextEndTime && nextStartTime && nextEndTime <= nextStartTime) {
       return res.status(400).json({ error: 'The stop must start before its end time.' });
     }
 
+    let nextOrderIndex = current.order_index;
+    if (nextDayIndex !== current.day_index) {
+      const [lastItem] = await d1Query(
+        'SELECT COALESCE(MAX(order_index), -1) AS max_order_index FROM itinerary_items WHERE trip_id = ? AND day_index = ?',
+        [tripId, nextDayIndex]
+      );
+      nextOrderIndex = Number(lastItem?.max_order_index ?? -1) + 1;
+    }
+
     await d1Query(
-      'UPDATE itinerary_items SET place_id = ?, start_time = ?, updated_at = ? WHERE id = ? AND trip_id = ?',
-      [nextPlaceId, nextStartTime, new Date().toISOString(), itemId, tripId]
+      `UPDATE itinerary_items
+       SET place_id = ?, day_index = ?, order_index = ?, start_time = ?, end_time = ?, note = ?, visited_at = ?, estimated_cost = ?, cost_currency = ?, booking_url = ?, photo_url = ?, updated_at = ?
+       WHERE id = ? AND trip_id = ?`,
+      [nextPlaceId, nextDayIndex, nextOrderIndex, nextStartTime, nextEndTime, nextNote, nextVisitedAt, nextEstimatedCost, nextCostCurrency, nextBookingUrl, nextPhotoUrl, new Date().toISOString(), itemId, tripId]
     );
     const [updated] = await d1Query(
       `SELECT i.*, p.name AS place_name, p.category, p.latitude, p.longitude, p.google_place_id
@@ -196,8 +276,8 @@ router.put('/:tripId/reorder', async (req, res) => {
 
   try {
     const [ownedTrip] = await d1Query(
-      'SELECT id, start_date, end_date FROM trips WHERE id = ? AND user_id = ?',
-      [tripId, req.user.id]
+      `SELECT t.id, t.start_date, t.end_date FROM trips t WHERE t.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted'))`,
+      [tripId, req.user.id, req.user.id]
     );
     if (!ownedTrip) return res.status(404).json({ error: 'Trip not found' });
 
@@ -242,8 +322,8 @@ router.delete('/item/:itemId', async (req, res) => {
   try {
     const [ownedItem] = await d1Query(
       `SELECT i.id FROM itinerary_items i JOIN trips t ON t.id = i.trip_id
-       WHERE i.id = ? AND t.user_id = ?`,
-      [itemId, req.user.id]
+       WHERE i.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted'))`,
+      [itemId, req.user.id, req.user.id]
     );
     if (!ownedItem) return res.status(404).json({ error: 'Itinerary item not found' });
     await d1Query('DELETE FROM itinerary_items WHERE id = ?', [itemId]);

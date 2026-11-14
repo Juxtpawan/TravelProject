@@ -26,6 +26,94 @@ export function createEmptyBrief() {
   return structuredClone(EMPTY_BRIEF);
 }
 
+function normalizeDestination(value) {
+  const destination = String(value || '')
+    .replace(/\b(?:a|an|the)\s+(?:trip|holiday|vacation)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return destination.length >= 2 && destination.length <= 100 ? destination : null;
+}
+
+function parseGroupSize(value) {
+  const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric > 0 && numeric <= 20) return numeric;
+  return words[String(value || '').toLowerCase()] || null;
+}
+
+export function extractDirectBriefPatch(brief, message) {
+  const text = String(message || '').trim();
+  const lower = text.toLowerCase();
+  if (!text) return { patch: {}, acknowledgement: '' };
+
+  const patch = {};
+  const exactDates = [...text.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)].map(match => match[1]);
+  if (exactDates.length >= 2) {
+    patch.startDate = exactDates[0];
+    patch.endDate = exactDates[1];
+  }
+
+  const destinationMatch = text.match(/\b(?:trip|travel|go|visit|plan)\s+(?:to|in)\s+([^,.!?]+?)(?=\s+(?:from|for|with|on|starting)\b|[,.!?]|$)/i);
+  const destination = normalizeDestination(destinationMatch?.[1]);
+  if (destination) patch.destination = destination;
+
+  const originMatch = text.match(/\b(?:starting|leaving|flying|travell?ing)\s+from\s+([^,.!?]+?)(?=[,.!?]|$)/i);
+  if (originMatch?.[1]) patch.origin = originMatch[1].trim().slice(0, 100);
+
+  const travelerType = /\bsolo\b/.test(lower) ? 'solo'
+    : /\bcouple\b/.test(lower) ? 'couple'
+      : /\bfamily\b/.test(lower) ? 'family'
+        : /\b(?:friends?|friend group)\b/.test(lower) ? 'friends' : null;
+  const groupSizeMatch = text.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:people|persons?|travell?ers?|adults?|members?)\b/i)
+    || text.match(/\b(?:family|group)\s+of\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i)
+    || text.match(/\b(\d+)\s+of\s+us\b/i);
+  const adults = parseGroupSize(groupSizeMatch?.[1]);
+  if (travelerType || adults) {
+    patch.travelers = {
+      ...(travelerType ? { type: travelerType } : {}),
+      ...(adults ? { adults, countProvided: true } : {}),
+      ...(travelerType === 'couple' && !adults ? { adults: 2 } : {}),
+      ...(travelerType === 'solo' && !adults ? { adults: 1 } : {}),
+    };
+  }
+
+  const durationMatch = text.match(/\b([1-9]|1\d|2[01])\s*[- ]?\s*days?\b/i);
+  if (durationMatch && exactDates.length < 2) patch.durationDays = Number(durationMatch[1]);
+
+  const budget = /\b(?:budget|affordable|cheap)\b/.test(lower) ? 'budget'
+    : /\b(?:mid[- ]?range|comfortable)\b/.test(lower) ? 'mid'
+      : /\bluxury\b/.test(lower) ? 'luxury' : null;
+  if (budget) patch.budget = budget;
+
+  const pace = /\brelaxed\b/.test(lower) ? 'relaxed'
+    : /\b(?:packed|busy|fast[- ]?paced)\b/.test(lower) ? 'packed'
+      : /\bbalanced\b/.test(lower) ? 'balanced' : null;
+  if (pace) patch.pace = pace;
+
+  const interests = [
+    ['nature', /\bnature\b/i],
+    ['food', /\b(?:food|foodie|restaurant|cuisine)\b/i],
+    ['culture', /\b(?:culture|history|heritage|museum)\b/i],
+    ['adventure', /\b(?:adventure|hike|trek|outdoor)\b/i],
+  ].filter(([, expression]) => expression.test(text)).map(([interest]) => interest);
+  if (interests.length) patch.interests = [...new Set([...(brief?.interests || []), ...interests])];
+
+  if (/\b(?:skip|skip for now|not sure)\b/i.test(text)) {
+    if (!brief?.origin) patch.skippedSlots = ['origin'];
+    else if (!brief?.travelers) patch.skippedSlots = ['travelers'];
+    else if (!brief?.interests?.length && !brief?.pace && !brief?.budget) patch.skippedSlots = ['preferences'];
+  }
+
+  const labels = [];
+  if (patch.destination) labels.push(`a trip to ${patch.destination}`);
+  if (patch.startDate && patch.endDate) labels.push('your travel dates');
+  else if (patch.durationDays) labels.push(`${patch.durationDays} days`);
+  if (patch.travelers) labels.push('your travel group');
+  if (patch.origin) labels.push(`your start from ${patch.origin}`);
+  if (budget || pace || interests.length) labels.push('your preferences');
+  return { patch, acknowledgement: labels.length ? `Got it — I’ve noted ${labels.join(', ')}.` : '' };
+}
+
 export function mergeBrief(currentBrief, patch) {
   const current = currentBrief && typeof currentBrief === 'object' ? currentBrief : createEmptyBrief();
   const next = { ...createEmptyBrief(), ...current };

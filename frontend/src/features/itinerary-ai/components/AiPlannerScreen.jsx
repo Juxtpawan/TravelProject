@@ -13,6 +13,7 @@ import {
 } from '../api/itineraryAiApi';
 import PlannerConversation from './PlannerConversation';
 import PlannerChatHistory from './PlannerChatHistory';
+import TripChecklist from './TripChecklist';
 
 export default function AiPlannerScreen() {
   const { user, isLoading: authLoading } = useAuth();
@@ -24,6 +25,7 @@ export default function AiPlannerScreen() {
   const [brief, setBrief] = useState(null);
   const [messages, setMessages] = useState([]);
   const [destinations, setDestinations] = useState([]);
+  const [destinationsLoaded, setDestinationsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -68,7 +70,7 @@ export default function AiPlannerScreen() {
   }, [authLoading, user?.id]);
 
   useEffect(() => {
-    getDestinations().then(setDestinations).catch(() => setDestinations([]));
+    getDestinations().then(setDestinations).catch(() => setDestinations([])).finally(() => setDestinationsLoaded(true));
   }, []);
 
   const handleSend = async (message) => {
@@ -152,6 +154,10 @@ export default function AiPlannerScreen() {
     }
   };
 
+  const handleSelectDestination = (destination) => {
+    handleSend(`I want to plan a trip to ${destination}.`);
+  };
+
   const handleSelectConversation = async (id) => {
     if (!id || id === conversationId || isSending || isGenerating) return;
     setIsLoading(true);
@@ -182,7 +188,7 @@ export default function AiPlannerScreen() {
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-badge-bg text-pine"><Compass size={23} /></span>
           <h1 className="mt-4 text-2xl font-extrabold text-pine">Plan a trip with AI</h1>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-text-secondary">Sign in to save your trip brief and keep the itinerary you build.</p>
-          <Link to="/auth/login" state={{ from: '/ai' }} className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-pine px-6 text-sm font-bold text-white hover:bg-pine/90">Sign in to continue</Link>
+          <Link to="/auth/login" state={{ from: '/ai' }} className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-btn-primary-bg px-6 text-sm font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover">Sign in to continue</Link>
         </section>
       </div>
     );
@@ -193,7 +199,25 @@ export default function AiPlannerScreen() {
   }
 
   const tripDuration = (Date.parse(`${brief.endDate}T00:00:00Z`) - Date.parse(`${brief.startDate}T00:00:00Z`)) / 86400000;
-  const canGenerate = Boolean(brief.destination && brief.startDate && brief.endDate && Number.isFinite(tripDuration) && tripDuration >= 0 && tripDuration < 21);
+  const destinationAvailability = (() => {
+    if (!brief.destination) return { status: 'idle', message: '' };
+    if (!destinationsLoaded) return { status: 'checking', message: 'Checking verified places for this destination…' };
+    const normalize = value => String(value || '').trim().toLocaleLowerCase();
+    const match = destinations.find(destination => normalize(destination.name) === normalize(brief.destination));
+    if (!match) return {
+      status: 'unavailable',
+      message: `${brief.destination} is not in the verified guide yet. Choose a destination with saved places before building an itinerary.`,
+    };
+    if (Number(match.places_count || 0) < 1) return {
+      status: 'unavailable',
+      message: `${match.name} does not have verified places yet, so a reliable itinerary cannot be created.`,
+    };
+    return { status: 'ready', message: '', destination: match };
+  })();
+  const canGenerate = Boolean(brief.destination && brief.startDate && brief.endDate && Number.isFinite(tripDuration) && tripDuration >= 0 && tripDuration < 21 && destinationAvailability.status === 'ready');
+  const generationDisabledMessage = destinationAvailability.status === 'unavailable'
+    ? destinationAvailability.message
+    : 'Share a destination and exact dates to unlock your first draft. You can skip the other details.';
   const hasStarted = Boolean(brief.destination || messages.some(message => message.role === 'user'));
 
   return (
@@ -214,7 +238,7 @@ export default function AiPlannerScreen() {
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 justify-center">
+      <div className="relative flex min-h-0 flex-1 justify-center gap-4">
         {!hasStarted && !isLoading && (
           <div className="pointer-events-none absolute inset-x-0 top-[12%] z-0 flex flex-col items-center px-4 text-center sm:top-[18%]">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">A better way to plan</p>
@@ -235,9 +259,25 @@ export default function AiPlannerScreen() {
           onSend={handleSend}
           onGenerate={handleGenerate}
           canGenerate={canGenerate}
+          destinationAvailability={destinationAvailability}
           tripResult={tripResult}
           onOpenTrip={() => navigate(`/trips/${tripResult.tripId}`)}
+          onBrowseDestinations={() => navigate('/explore')}
         />
+        <div className="app-scrollbar hidden w-72 shrink-0 overflow-y-auto py-4 xl:block">
+          <TripChecklist
+            brief={brief}
+            destinations={destinations}
+            canGenerate={canGenerate}
+            generationDisabledMessage={generationDisabledMessage}
+            isGenerating={isGenerating}
+            generationStages={generationStages}
+            tripResult={tripResult}
+            onSelectDestination={handleSelectDestination}
+            onGenerate={handleGenerate}
+            onOpenTrip={() => navigate(`/trips/${tripResult.tripId}`)}
+          />
+        </div>
       </div>
       {isHistoryOpen && (
         <div className="fixed inset-0 z-[60] flex justify-start bg-black/25 backdrop-blur-[1px]">

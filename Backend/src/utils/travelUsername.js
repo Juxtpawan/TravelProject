@@ -64,7 +64,7 @@ export function generateRandomTravelUsername() {
   const adj = TRAVEL_ADJECTIVES[Math.floor(Math.random() * TRAVEL_ADJECTIVES.length)];
   const noun = TRAVEL_NOUNS[Math.floor(Math.random() * TRAVEL_NOUNS.length)];
   const num = Math.floor(10 + Math.random() * 990); // 10 to 999
-  return `${adj}${noun}${num}`;
+  return `${adj}${noun}${num}`.toLowerCase();
 }
 
 export async function generateUniqueTravelUsername(d1Query) {
@@ -79,5 +79,5 @@ export async function generateUniqueTravelUsername(d1Query) {
     }
   }
   // Fallback with timestamp suffix if repeated collisions
-  return `Traveler_${Date.now().toString().slice(-6)}`;
+  return `traveler_${Date.now().toString().slice(-6)}`;
 }

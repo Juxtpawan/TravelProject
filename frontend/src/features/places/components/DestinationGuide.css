@@ -1,0 +1,23 @@
+/* These full-width place buttons should not show the shared global focus halo. */
+.guide-place-trigger:focus,
+.guide-place-trigger:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .guide-place-card .guide-place-trigger:not(:disabled):hover {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .guide-place-card:hover {
+    transform: translateY(-0.125rem);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  .guide-place-card[data-selected="false"]:hover {
+    border-color: #a8cbb6;
+  }
+}

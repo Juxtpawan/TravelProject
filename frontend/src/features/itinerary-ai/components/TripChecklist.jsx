@@ -43,7 +43,7 @@ function getFieldValue(id, brief) {
   return brief[id] || '';
 }
 
-export default function TripChecklist({ brief, destinations, canGenerate, isGenerating, generationStages = [], tripResult, onSelectDestination, onGenerate, onOpenTrip }) {
+export default function TripChecklist({ brief, destinations, canGenerate, generationDisabledMessage, isGenerating, generationStages = [], tripResult, onSelectDestination, onGenerate, onOpenTrip }) {
   const [expanded, setExpanded] = useState(true);
   const skippedSlots = brief.skippedSlots || [];
   const completedCount = checklistFields.filter(({ id }) => Boolean(getFieldValue(id, brief)) || skippedSlots.includes(id)).length;
@@ -67,7 +67,7 @@ export default function TripChecklist({ brief, destinations, canGenerate, isGene
         </span>
       </button>
       <div className="h-1 bg-gray" role="progressbar" aria-label="Trip brief progress" aria-valuemin={0} aria-valuemax={5} aria-valuenow={completedCount}>
-        <div className="h-full bg-pine transition-[width] duration-300" style={{ width: `${progress}%` }} />
+        <div className="h-full bg-green transition-[width] duration-300" style={{ width: `${progress}%` }} />
       </div>
 
       {expanded && (
@@ -128,7 +128,7 @@ export default function TripChecklist({ brief, destinations, canGenerate, isGene
               <>
                 <p className="text-sm font-bold text-pine">Your draft is ready</p>
                 <p className="mt-1 text-xs text-text-secondary">{tripResult.totalItems} verified stops across {tripResult.numDays} days</p>
-                <button type="button" onClick={onOpenTrip} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-pine px-4 text-sm font-bold text-white hover:bg-pine/90">
+                <button type="button" onClick={onOpenTrip} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text hover:bg-btn-primary-bg-hover">
                   Open itinerary <MapPin size={15} />
                 </button>
               </>
@@ -157,14 +157,14 @@ export default function TripChecklist({ brief, destinations, canGenerate, isGene
                   type="button"
                   onClick={onGenerate}
                   disabled={!canGenerate || isGenerating}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-pine px-4 text-sm font-bold text-white transition hover:bg-pine/90 disabled:cursor-not-allowed disabled:bg-text-secondary"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover disabled:cursor-not-allowed disabled:bg-text-secondary"
                 >
                   <Sparkles size={16} />{isGenerating ? 'Building your trip…' : 'Generate my trip'}
                 </button>
                 <p className="mt-3 text-xs leading-5 text-text-secondary">
                   {canGenerate
                     ? 'I’ll turn your brief into a real, editable itinerary.'
-                    : 'Share a destination and exact dates to unlock your first draft. You can skip the other details.'}
+                    : generationDisabledMessage || 'Share a destination and exact dates to unlock your first draft. You can skip the other details.'}
                 </p>
               </>
             )}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, Plus, X } from 'lucide-react';
 import { DEFAULT_WISHLIST_ID } from '../api/wishlistStorage';
 import useWishlist from '../hooks/useWishlist';
+import { acquireBodyScrollLock } from '../../../shared/utils/bodyScrollLock';
 
 const POPOVER_WIDTH = 448;
 
@@ -19,12 +20,11 @@ export default function WishlistCollectionPicker({ place, destination, anchorEle
   const onCloseRef = useRef(onClose);
   const nameInputId = useId();
   const titleId = useId();
-  onCloseRef.current = onClose;
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const releaseBodyScrollLock = acquireBodyScrollLock();
     closeButtonRef.current?.focus();
 
     const closeOnEscape = (event) => {
@@ -32,7 +32,7 @@ export default function WishlistCollectionPicker({ place, destination, anchorEle
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.body.style.overflow = oldOverflow;
+      releaseBodyScrollLock();
       document.removeEventListener('keydown', closeOnEscape);
       if (previousFocusRef.current instanceof HTMLElement && previousFocusRef.current.isConnected) {
         previousFocusRef.current.focus();
@@ -114,7 +114,7 @@ export default function WishlistCollectionPicker({ place, destination, anchorEle
                   onClick={() => togglePlace(list.id, place, destination)}
                   className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#f7faf7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pine"
                 >
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${checked ? 'border-pine bg-pine text-white' : 'border-[#bdc9c0] bg-white text-transparent'}`}><Check size={14} /></span>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${checked ? 'border-green bg-green text-btn-primary-text' : 'border-[#bdc9c0] bg-white text-transparent'}`}><Check size={14} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-[#263a30]">{list.name}</span>
                     <span className="mt-0.5 block text-xs text-[#718077]">{list.items.length} saved</span>
@@ -137,7 +137,7 @@ export default function WishlistCollectionPicker({ place, destination, anchorEle
                 placeholder="Weekend in Jaipur"
                 className="h-11 min-w-0 flex-1 rounded-xl border border-[#d4ded6] px-3 text-sm outline-none focus:border-pine focus:ring-2 focus:ring-pine/10"
               />
-              <button type="submit" className="h-11 shrink-0 rounded-xl bg-pine px-4 text-sm font-bold text-white transition hover:bg-pine/90">Create and save</button>
+              <button type="submit" className="h-11 shrink-0 rounded-xl bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover">Create and save</button>
             </div>
             {error && <p role="alert" className="mt-2 text-xs font-medium text-[#a13a31]">{error}</p>}
           </form> : <button type="button" onClick={() => setShowCreateForm(true)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-pine transition hover:bg-[#edf4ef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine">
@@ -146,7 +146,7 @@ export default function WishlistCollectionPicker({ place, destination, anchorEle
         </div>
 
         <footer className="flex shrink-0 justify-end border-t border-[#e5ebe6] bg-white px-4 py-3 sm:px-5">
-          <button type="button" onClick={onClose} className="min-h-10 min-w-24 rounded-full bg-pine px-5 text-sm font-bold text-white transition hover:bg-pine/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-pine">Done</button>
+          <button type="button" onClick={onClose} className="min-h-10 min-w-24 rounded-full bg-btn-primary-bg px-5 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-medium">Done</button>
         </footer>
       </section>
     </div>,

@@ -4,9 +4,11 @@ import { ArrowRight, MapPin, Sparkles } from 'lucide-react';
 import { getDestinations } from '../features/places';
 import DestinationSearch from '../features/places/components/DestinationSearch';
 import CommonsPlaceImage from '../features/place-images/components/CommonsPlaceImage';
+import { HERO_IMAGES, useHeroImageIndex } from '../shared/heroImages';
 
 export default function HomePage() {
   const [destinations, setDestinations] = useState([]);
+  const heroImageIndex = useHeroImageIndex();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,30 +25,36 @@ export default function HomePage() {
   return (
     <div className="pb-16">
       {/* ─── Hero ─────────────────────────────────────────────── */}
-      <section className="relative isolate mx-auto min-h-90 max-w-360 overflow-visible sm:rounded-b-lg">
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-[#17382d] via-[#42604b] to-[#9a6945]" />
-        <div aria-hidden="true" className="absolute inset-0 bg-linear-to-r from-[#10261f]/70 via-[#10261f]/35 to-[#10261f]/10" />
-        <div className="app-container relative flex min-h-90 items-center py-12">
-          <div className="max-w-2xl text-white">
-            <p className="mb-4 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-[#d5efad]">
-              <Sparkles size={16} /> Make your trip planned and organized
+      <section className="home-hero relative isolate mx-auto w-full max-w-[80rem] overflow-hidden sm:rounded-b-lg">
+        <div aria-hidden="true" className="absolute inset-0 z-0 bg-[#faf1ed]" />
+        {HERO_IMAGES.map((image, index) => (
+          <img
+            key={image.src}
+            src={image.src}
+            srcSet={image.srcSet}
+            sizes="(min-width: 1280px) 1280px, 100vw"
+            alt=""
+            aria-hidden="true"
+            fetchPriority={index === heroImageIndex ? 'high' : 'auto'}
+            decoding="async"
+            className={`absolute inset-0 z-10 h-full w-full max-w-full object-cover transition-opacity duration-1000 ${heroImageIndex === index ? 'opacity-100' : 'opacity-0'}`}
+          />
+        ))}
+        <div aria-hidden="true" className="absolute inset-0 z-20 bg-gradient-to-r from-[#004f32]/12 via-transparent to-transparent" />
+        <div className="home-hero-content app-container relative z-30 flex min-h-[25rem] items-center py-5 sm:min-h-[22rem] sm:py-8 lg:min-h-[25rem] lg:py-10">
+          <div className="max-w-2xl rounded-2xl border border-white/75 bg-white/95 p-4 text-pine shadow-xl backdrop-blur-md sm:rounded-3xl sm:p-7 md:p-8">
+            <p className="mb-3 inline-flex max-w-full items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-green-ink sm:mb-4 sm:text-sm sm:tracking-[0.14em]">
+              <Sparkles size={16} className="shrink-0" /> <span>Make your trip planned and organized</span>
             </p>
-            <h1 className="max-w-xl text-4xl font-extrabold leading-[1.08] sm:text-5xl">
+            <h1 className="max-w-xl text-3xl font-extrabold leading-[1.08] text-pine min-[400px]:text-4xl sm:text-5xl">
               Plan your trip with ease.
             </h1>
-            <p className="mt-4 max-w-lg text-base leading-7 text-white/90 sm:text-lg">
+            <p className="mt-3 max-w-lg text-sm leading-6 text-text-secondary sm:mt-4 sm:text-lg sm:leading-7">
               Explore places travelers love, then turn the good ideas into a trip that is yours.
             </p>
-            <div className="mt-7 max-w-xl rounded-lg bg-white p-2 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
+            <div className="mt-5 max-w-xl rounded-xl border border-[#e2eee6] bg-[#f7fbf8] p-1.5 shadow-sm sm:mt-7 sm:rounded-2xl sm:p-2">
               <DestinationSearch onSearch={openDestination} />
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/explore')}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-white underline decoration-white/60 underline-offset-4 hover:decoration-white"
-            >
-              Browse all destinations <ArrowRight size={16} />
-            </button>
           </div>
         </div>
       </section>
@@ -65,7 +73,7 @@ export default function HomePage() {
           </div>
 
           {destinations.length ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
               {destinations.slice(0, 6).map((destination) => (
                 <button
                   key={destination.id}
@@ -79,22 +87,23 @@ export default function HomePage() {
                       category="destination"
                       destination={destination.name}
                       name={destination.name}
+                      latitude={destination.latitude}
+                      longitude={destination.longitude}
                       alt={destination.name}
                       className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      fallback={<span className="grid h-full w-full place-items-center bg-[#1b3d30] text-[#9fc7b3]"><MapPin size={28} /></span>}
+                      fallback={<span className="grid h-full w-full place-items-center bg-gradient-to-br from-[#e7f7ef] via-white to-[#faf1ed]"><span className="grid h-14 w-14 place-items-center rounded-full border border-white/80 bg-white/75 text-green-ink shadow-md"><MapPin size={26} /></span></span>}
                     />
                   ) : (
-                    <div className="grid h-full w-full place-items-center bg-gradient-to-br from-[#1b3d30] to-[#2e5d4a] text-white">
-                      <MapPin size={28} />
+                    <div className="grid h-full w-full place-items-center bg-gradient-to-br from-[#e7f7ef] via-white to-[#faf1ed]">
+                      <span className="grid h-14 w-14 place-items-center rounded-full border border-white/80 bg-white/75 text-green-ink shadow-md"><MapPin size={26} /></span>
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent transition-opacity group-hover:from-black/95" />
-                  <div className="absolute inset-x-0 bottom-0 p-4 text-center">
-                    <span className="block truncate text-lg font-black tracking-wide text-white drop-shadow-md sm:text-xl">
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col bg-white/95 px-3 py-2.5 text-left shadow-[0_-8px_24px_rgba(20,40,30,0.08)] backdrop-blur-sm transition-colors group-hover:bg-white sm:px-4 sm:py-3">
+                    <span className="block truncate text-sm font-extrabold tracking-tight text-pine min-[400px]:text-base sm:text-lg">
                       {destination.name}
                     </span>
                     {destination.country && (
-                      <span className="block text-xs font-semibold text-white/80 drop-shadow mt-0.5">
+                      <span className="mt-0.5 block truncate text-[10px] font-medium text-[#68756f] sm:text-xs">
                         {destination.country}
                       </span>
                     )}

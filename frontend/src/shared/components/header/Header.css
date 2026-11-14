@@ -4,6 +4,32 @@
   initial-value: 0deg;
 }
 
+@keyframes header-panel-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mobile-navigation-panel,
+.header-popover-panel {
+  animation: header-panel-enter 160ms ease-out both;
+}
+
+/* Keep button feedback consistent across the app without recoloring controls. */
+button:not(:disabled),
+[role="button"] {
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+button:not(:disabled):hover,
+[role="button"]:hover {
+  box-shadow: 0 5px 16px rgba(0, 79, 50, 0.12);
+}
+
+button[class*="border"]:not([class*="border-b"]):not([class*="border-transparent"]),
+[role="button"][class*="border"]:not([class*="border-b"]):not([class*="border-transparent"]) {
+  border-color: color-mix(in srgb, currentColor 16%, transparent);
+}
+
 .site-header a:not(.site-header-brand),
 .site-header button {
   transition: transform 180ms ease, box-shadow 180ms ease;
@@ -14,7 +40,7 @@
 .site-header a:not(.site-header-brand):focus-visible,
 .site-header button:focus-visible {
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(100, 91, 220, 0.18);
+  box-shadow: 0 5px 16px rgba(0, 126, 91, 0.12);
 }
 
 .site-header a:not(.site-header-brand):active,
@@ -24,35 +50,35 @@
 
 .ai-planner-nav-link {
   --ai-planner-border-angle: 0deg;
-  --ai-planner-face: linear-gradient(115deg, #ffffff, #fbfaff);
+  --ai-planner-face: linear-gradient(115deg, #ffffff, #f6fbf8);
   position: relative;
   isolation: isolate;
   border: 1.5px solid transparent;
-  color: #263a30;
-  box-shadow: 0 1px 5px rgba(81, 94, 158, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  color: #004f32;
+  box-shadow: 0 1px 5px rgba(0, 126, 91, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.96);
   background:
     var(--ai-planner-face) padding-box,
     conic-gradient(
       from var(--ai-planner-border-angle),
-      #65a9f8 0deg,
-      #7770e8 120deg,
-      #b970d5 235deg,
-      #ec9db8 310deg,
-      #65a9f8 360deg
+      #00aa6c 0deg,
+      #34e0a1 120deg,
+      #f2b203 235deg,
+      #b1dbc8 310deg,
+      #00aa6c 360deg
     ) border-box;
   animation: ai-planner-border-spin 7s linear infinite;
   transition: box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
 }
 
 .ai-planner-nav-link:hover {
-  --ai-planner-face: linear-gradient(115deg, #ffffff, #f4f6ff);
-  box-shadow: 0 0 0 2px rgba(107, 104, 219, 0.055), 0 3px 11px rgba(100, 91, 220, 0.14), inset 0 1px 0 #ffffff;
+  --ai-planner-face: linear-gradient(115deg, #ffffff, #edf8f2);
+  box-shadow: 0 0 0 2px rgba(0, 79, 50, 0.055), 0 3px 11px rgba(0, 126, 91, 0.14), inset 0 1px 0 #ffffff;
   transform: translateY(-1px);
 }
 
 .ai-planner-nav-link.ai-planner-nav-link-active {
-  --ai-planner-face: linear-gradient(115deg, #f2f6ff, #f9f2ff);
-  box-shadow: 0 0 0 2px rgba(107, 104, 219, 0.06), 0 2px 9px rgba(72, 82, 179, 0.12), inset 0 1px 0 #ffffff;
+  --ai-planner-face: linear-gradient(115deg, #eaf7f1, #f7fbf8);
+  box-shadow: 0 0 0 2px rgba(0, 79, 50, 0.06), 0 2px 9px rgba(0, 126, 91, 0.12), inset 0 1px 0 #ffffff;
 }
 
 .ai-planner-icon {
@@ -76,17 +102,27 @@
 
 @keyframes ai-planner-sparkle-twinkle {
   0%, 100% {
-    filter: drop-shadow(0 0 0 rgba(119, 112, 232, 0));
+    filter: drop-shadow(0 0 0 rgba(0, 122, 89, 0));
     transform: scale(0.94);
   }
 
   45% {
-    filter: drop-shadow(0 0 3px rgba(119, 112, 232, 0.48));
+    filter: drop-shadow(0 0 3px rgba(0, 122, 89, 0.48));
     transform: scale(1.08);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mobile-navigation-panel,
+  .header-popover-panel {
+    animation: none;
+  }
+
+  button:not(:disabled),
+  [role="button"] {
+    transition: none;
+  }
+
   .ai-planner-nav-link,
   .ai-planner-icon svg {
     animation: none;

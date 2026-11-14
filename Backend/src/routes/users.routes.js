@@ -6,6 +6,32 @@ import { generateRandomTravelUsername, generateUniqueTravelUsername } from '../u
 
 const router = express.Router();
 
+// GET /users/search?q=... — search public profile details for trip invitations.
+router.get('/search', authMiddleware, async (req, res) => {
+  const rawQuery = typeof req.query.q === 'string' ? req.query.q.trim().replace(/^@/, '') : '';
+  if (rawQuery.length < 2) return res.json([]);
+  const query = rawQuery.slice(0, 50);
+  const like = `%${query.replace(/[!%_]/g, '!$&')}%`;
+  try {
+    const users = await d1Query(
+      `SELECT id, name, username, avatar_url
+       FROM users
+       WHERE id != ? AND (
+         lower(username) LIKE lower(?) ESCAPE '!'
+         OR lower(name) LIKE lower(?) ESCAPE '!'
+         OR lower(email) = lower(?)
+       )
+       ORDER BY CASE WHEN lower(username) = lower(?) THEN 0 WHEN lower(username) LIKE lower(?) ESCAPE '!' THEN 1 ELSE 2 END, lower(username)
+       LIMIT 8`,
+      [req.user.id, like, like, query, query, `${query.replace(/[!%_]/g, '!$&')}%`]
+    );
+    return res.json(users);
+  } catch (error) {
+    console.error('Error searching tripmate profiles:', error);
+    return res.status(500).json({ error: 'Profiles could not be searched.' });
+  }
+});
+
 // GET /users/suggest-username — returns a random travel username idea
 router.get('/suggest-username', (req, res) => {
   res.json({ username: generateRandomTravelUsername() });
@@ -55,14 +81,15 @@ router.put('/:userId/profile', authMiddleware, async (req, res) => {
   }
 
   const { name, email, username, avatarUrl } = req.body;
+  const normalizedUsername = typeof username === 'string' ? username.trim().toLowerCase() : username;
 
   try {
     const currentUser = await usersQueries.findUserById(userId);
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
     // Validate username if provided / changed
-    if (username && username.trim() !== (currentUser.username || '')) {
-      const cleanUsername = username.trim();
+    if (normalizedUsername && normalizedUsername !== (currentUser.username || '').toLowerCase()) {
+      const cleanUsername = normalizedUsername;
       if (!/^[a-zA-Z0-9_-]{3,30}$/.test(cleanUsername)) {
         return res.status(400).json({
           error: 'Travel handle must be 3-30 characters (letters, numbers, underscores, or hyphens only).',
@@ -78,7 +105,7 @@ router.put('/:userId/profile', authMiddleware, async (req, res) => {
     // Email updates are disabled — keep currentUser.email
     const updated = await usersQueries.updateUserProfile(userId, {
       name: name ?? currentUser.name,
-      username: username ?? currentUser.username,
+      username: normalizedUsername ?? currentUser.username,
       avatarUrl: avatarUrl !== undefined ? avatarUrl : currentUser.avatar_url,
     });
 

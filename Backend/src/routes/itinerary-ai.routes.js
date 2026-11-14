@@ -120,61 +120,6 @@ router.get('/conversations/latest', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/trips/:tripId/conversation', authMiddleware, async (req, res) => {
-  try {
-    let [conversation] = await d1Query(
-      `SELECT * FROM ai_conversations WHERE trip_id = ? AND user_id = ? ORDER BY updated_at DESC LIMIT 1`,
-      [req.params.tripId, req.user.id]
-    );
-    if (!conversation) {
-      const [trip] = await d1Query(
-        `SELECT t.id, t.start_date, t.end_date, d.name AS destination_name
-         FROM trips t JOIN destinations d ON d.id = t.destination_id
-         WHERE t.id = ? AND t.user_id = ? LIMIT 1`,
-        [req.params.tripId, req.user.id]
-      );
-      if (!trip) return res.status(404).json({ error: 'Trip not found.' });
-      const brief = {
-        ...createEmptyBrief(),
-        destination: trip.destination_name,
-        startDate: trip.start_date,
-        endDate: trip.end_date,
-        durationDays: Math.round((Date.parse(`${trip.end_date}T00:00:00Z`) - Date.parse(`${trip.start_date}T00:00:00Z`)) / 86400000) + 1,
-      };
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const welcome = 'I can help adjust this itinerary. Tell me what you would like to change; the trip dates and destination will stay fixed.';
-      await d1Batch([
-        {
-          sql: `INSERT INTO ai_conversations (id, user_id, trip_id, title, brief_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          params: [id, req.user.id, trip.id, `${trip.destination_name} trip`, JSON.stringify(brief), now, now],
-        },
-        {
-          sql: `INSERT INTO ai_messages (id, conversation_id, role, content, created_at)
-                VALUES (?, ?, 'assistant', ?, ?)`,
-          params: [crypto.randomUUID(), id, welcome, now],
-        },
-      ]);
-      conversation = { id, trip_id: trip.id, brief_json: JSON.stringify(brief) };
-    }
-    const messages = await d1Query(
-      `SELECT id, role, content, created_at FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC`,
-      [conversation.id]
-    );
-    res.json({
-      conversationId: conversation.id,
-      tripId: conversation.trip_id,
-      brief: JSON.parse(conversation.brief_json || '{}'),
-      messages,
-      tripResult: await getTripResult(conversation.trip_id),
-    });
-  } catch (error) {
-    console.error('[AI conversation] Trip conversation load failed:', error);
-    res.status(500).json({ error: 'Could not load the AI assistant for this trip.' });
-  }
-});
-
 router.get('/conversations/:conversationId', authMiddleware, async (req, res) => {
   try {
     const conversation = await getConversation(req.params.conversationId, req.user.id);
@@ -348,7 +293,7 @@ router.post('/conversations/:conversationId/generate', authMiddleware, async (re
        WHERE lower(name) = lower(?) OR slug = ? LIMIT 1`,
       [brief.destination.trim(), destinationSlug]
     );
-    if (!destination) throw new Error('I could not find that destination in the travel guide yet.');
+    if (!destination) throw new Error(`${brief.destination} is not ready in the verified guide yet. Choose a destination with saved places before building an itinerary.`);
     emit({ type: 'stage', id: 'resolve_destination', label: 'Destination resolved', status: 'complete' });
 
     emit({ type: 'stage', id: 'load_places', label: 'Loading verified places', status: 'active' });
@@ -357,7 +302,7 @@ router.post('/conversations/:conversationId/generate', authMiddleware, async (re
        FROM places WHERE destination_id = ? LIMIT 40`,
       [destination.id]
     );
-    if (!places.length) throw new Error('There are no verified places for this destination yet.');
+    if (!places.length) throw new Error(`${destination.name} does not have verified places yet, so a reliable itinerary cannot be created.`);
     emit({ type: 'stage', id: 'load_places', label: `Loaded ${places.length} verified places`, status: 'complete' });
 
     const candidatePlaces = places.map(({ id, name, category, latitude, longitude }) => ({
@@ -372,7 +317,7 @@ Dates: ${brief.startDate} through ${brief.endDate}.
 Travelers: ${JSON.stringify(brief.travelers)}. Starting from: ${brief.origin || 'not specified'}.
 Interests: ${JSON.stringify(brief.interests)}. Pace: ${brief.pace || 'balanced'}. Budget: ${brief.budget || 'not specified'}.
 Must-see: ${JSON.stringify(brief.mustSee)}. Avoid: ${JSON.stringify(brief.avoid)}.
-Select only from these verified places: ${JSON.stringify(candidatePlaces)}.
+Select only from these verified places: ${JSON.stringify(candidatePlaces)}. Include at least one restaurant each day when a restaurant is among the verified candidates; schedule restaurants at meal times and balance them with attractions.
 Return a JSON array with 2-4 stops per day using exactly these fields:
 [{"dayIndex":0,"placeId":"existing id","startTime":"09:00","note":"short practical tip"}]`,
       maxOutputTokens: 2500,
@@ -511,8 +456,8 @@ router.post('/:tripId/generate', authMiddleware, async (req, res) => {
     const [trip] = await d1Query(
       `SELECT t.*, d.name as dest_name 
        FROM trips t JOIN destinations d ON t.destination_id = d.id
-      WHERE t.id = ? AND t.user_id = ?`,
-          [tripId, req.user.id]
+      WHERE t.id = ? AND (t.user_id = ? OR EXISTS (SELECT 1 FROM trip_collaborators c WHERE c.trip_id = t.id AND c.user_id = ? AND c.role = 'editor' AND c.status = 'accepted'))`,
+          [tripId, req.user.id, req.user.id]
     );
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
 

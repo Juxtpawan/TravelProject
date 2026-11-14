@@ -160,6 +160,7 @@ export const trips = sqliteTable('trips', {
     .notNull()
     .references(() => destinations.id),
   title: text('title').notNull(), // e.g., "Summer in Manali"
+  notes: text('notes').notNull().default(''),
   startDate: text('start_date').notNull(), // YYYY-MM-DD
   endDate: text('end_date').notNull(), // YYYY-MM-DD
   createdAt: text('created_at').notNull(),
@@ -228,6 +229,11 @@ export const itineraryItems = sqliteTable('itinerary_items', {
   startTime: text('start_time'), // e.g. "09:00"
   endTime: text('end_time'), // e.g. "11:00"
   note: text('note'),
+  visitedAt: text('visited_at'),
+  estimatedCost: text('estimated_cost').notNull().default(''),
+  costCurrency: text('cost_currency').notNull().default('INR'),
+  bookingUrl: text('booking_url').notNull().default(''),
+  photoUrl: text('photo_url').notNull().default(''),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => ({

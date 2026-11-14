@@ -16,9 +16,9 @@ export default function AiPlannerMark({ size = 16 }) {
               dur="7s"
               repeatCount="indefinite"
             />
-            <stop offset="0%" stopColor="#4285f4" />
-            <stop offset="48%" stopColor="#9b72cb" />
-            <stop offset="100%" stopColor="#d96570" />
+            <stop offset="0%" stopColor="#00aa6c" />
+            <stop offset="48%" stopColor="#34e0a1" />
+            <stop offset="100%" stopColor="#f2b203" />
           </linearGradient>
         </defs>
         <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />

@@ -9,3 +9,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.workspace-pane-scroll .map-list-scrollbar {
+  scrollbar-color: #718178 #edf2ee;
+  scrollbar-width: thin;
+}
+
+.workspace-pane-scroll .map-list-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.workspace-pane-scroll .map-list-scrollbar::-webkit-scrollbar-track {
+  background: #edf2ee;
+}
+
+.workspace-pane-scroll .map-list-scrollbar::-webkit-scrollbar-thumb {
+  border: 1px solid #edf2ee;
+  border-radius: 999px;
+  background: #718178;
+  background-clip: padding-box;
+}

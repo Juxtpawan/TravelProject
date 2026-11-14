@@ -4,6 +4,8 @@ import { BedDouble, Check, ChevronDown, Landmark, ListChecks, MapPin, Plus, Sear
 import { Link } from 'react-router-dom';
 import useWishlist from '../hooks/useWishlist';
 import CommonsPlaceImage from '../../place-images/components/CommonsPlaceImage';
+import GoogleMapsAttribution from '../../../shared/components/google-maps-attribution/GoogleMapsAttribution';
+import GoogleGMark from '../../../shared/components/google-g-mark/GoogleGMark';
 import { fetchGooglePlaceDetails, getCachedPlaceDetails } from '../../places/api/googlePlaces';
 
 const categories = [
@@ -32,7 +34,7 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
       if (item.provider !== 'google' || !item.id) return;
       if (resolvedDetails[item.id]) return;
       const cached = getCachedPlaceDetails(item.id);
-      if (cached?.name && cached.name !== 'Saved place') {
+      if (cached?.name && cached.name !== 'Saved place' && cached.businessDetailsResolved) {
         setResolvedDetails((prev) => ({ ...prev, [item.id]: cached }));
         return;
       }
@@ -50,14 +52,15 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
     const resolved = resolvedDetails[item.id] || getCachedPlaceDetails(item.id);
     const name = resolved?.name || (item.name && item.name !== 'Saved place' ? item.name : item.displayName) || '';
     const formattedAddress = resolved?.formattedAddress || item.formattedAddress || '';
-    return { name, formattedAddress };
+    const description = resolved?.description || '';
+    return { name, formattedAddress, description, rating: resolved?.rating, userRatingCount: resolved?.userRatingCount };
   };
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const matchingItems = activeList.items.filter((item) => {
     if (!normalizedSearch) return true;
-    const { name, formattedAddress } = getItemDetails(item);
-    return [name, item.displayName, item.destinationName, item.destinationSlug, formattedAddress, categories.find((category) => category.id === item.category)?.label]
+    const { name, formattedAddress, description } = getItemDetails(item);
+    return [name, item.displayName, item.destinationName, item.destinationSlug, formattedAddress, description, categories.find((category) => category.id === item.category)?.label]
       .some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
   });
 
@@ -129,7 +132,7 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
                       setSearchTerm('');
                       if (listDropdownRef.current) listDropdownRef.current.open = false;
                     }} className={`flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${selected ? 'bg-[#edf4ef]' : 'hover:bg-[#f7faf7]'}`}>
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${selected ? 'bg-pine text-white' : 'bg-[#f1f5f2] text-[#627268]'}`}><ListChecks size={17} /></span>
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${selected ? 'bg-green text-btn-primary-text' : 'bg-[#f1f5f2] text-[#627268]'}`}><ListChecks size={17} /></span>
                       <span className="min-w-0 flex-1">
                         <span className={`block truncate text-sm font-bold ${selected ? 'text-pine' : 'text-[#35433d]'}`}>{list.name}</span>
                         <span className="mt-0.5 block text-xs text-[#718077]">{list.items.length} {list.items.length === 1 ? 'place' : 'places'}</span>
@@ -143,7 +146,7 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
           </details>
           <p className="mt-2 text-xs leading-5 text-[#718077]">New places saved from destination guides go to <span className="font-bold text-pine">{activeList.name}</span>. Choose another list above to change the save destination.</p>
         </div>
-        <button type="button" onClick={() => setShowCreateForm((value) => !value)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-pine px-4 text-sm font-bold text-white transition hover:bg-pine/90">
+        <button type="button" onClick={() => setShowCreateForm((value) => !value)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover">
           <Plus size={17} />New wishlist
         </button>
       </div>
@@ -152,7 +155,7 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
         <label htmlFor="wishlist-collection-name" className="block text-sm font-bold text-pine">Give this list a name</label>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <input id="wishlist-collection-name" autoFocus maxLength={48} value={newListName} onChange={(event) => { setNewListName(event.target.value); setError(''); }} placeholder="e.g. Kyoto food spots" className="h-11 min-w-0 flex-1 rounded-xl border border-[#d4ded6] px-3 text-sm outline-none focus:border-pine focus:ring-2 focus:ring-pine/10" />
-          <button type="submit" className="h-11 rounded-xl bg-[#eaf2ec] px-4 text-sm font-bold text-pine transition hover:bg-[#dce9df]">Create list</button>
+          <button type="submit" className="h-11 rounded-xl bg-btn-primary-bg px-4 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover">Create list</button>
         </div>
         {error && <p role="alert" className="mt-2 text-xs font-medium text-[#a13a31]">{error}</p>}
       </form>}
@@ -160,43 +163,44 @@ export default function WishlistOverlayContent({ onShowInGuide, onClose }) {
 
     {activeList.items.length > 0 && <label className="mt-5 flex h-11 items-center gap-2 rounded-xl border border-[#dce4de] bg-white px-3 text-[#718077] focus-within:border-pine focus-within:ring-2 focus-within:ring-pine/10 sm:max-w-xl">
       <Search size={17} className="shrink-0" />
-      <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={`Search ${activeList.name}`} aria-label={`Search ${activeList.name}`} className="min-w-0 flex-1 bg-transparent text-sm text-[#263a30] outline-none placeholder:text-[#87958b]" />
+      <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={`Search ${activeList.name}`} aria-label={`Search ${activeList.name}`} className="min-w-0 flex-1 bg-transparent text-sm text-[#263a30] outline-none focus-visible:outline-none placeholder:text-[#87958b]" />
     </label>}
 
     {activeList.items.length > 0 && <nav aria-label="Filter wishlist by category" className="app-scrollbar mt-3 flex gap-2 overflow-x-auto pb-2">
-      {visibleCategories.map(({ id, label, Icon }) => <button key={id} type="button" aria-pressed={activeCategory === id} onClick={() => setActiveCategory(id)} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${activeCategory === id ? 'border-pine bg-pine text-white' : 'border-[#dce4de] bg-white text-[#59675e] hover:bg-[#f2f6f3]'}`}><Icon size={15} />{label}{id !== 'all' && <span className="text-xs opacity-75">{activeList.items.filter((item) => item.category === id).length}</span>}</button>)}
+      {visibleCategories.map(({ id, label, Icon }) => <button key={id} type="button" aria-pressed={activeCategory === id} onClick={() => setActiveCategory(id)} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${activeCategory === id ? 'border-btn-primary-bg bg-btn-primary-bg text-btn-primary-text hover:bg-btn-primary-bg-hover' : 'border-[#dce4de] bg-white text-[#59675e] hover:bg-[#f2f6f3]'}`}><Icon size={15} />{label}{id !== 'all' && <span className="text-xs opacity-75">{activeList.items.filter((item) => item.category === id).length}</span>}</button>)}
     </nav>}
 
     {activeList.items.length === 0 ? <div className="mt-6 rounded-2xl border border-dashed border-[#cbd8ce] bg-white px-5 py-12 text-center sm:py-16">
       <MapPin size={28} className="mx-auto text-[#8a9a8e]" />
       <h3 className="mt-3 text-lg font-extrabold text-pine">This wishlist is ready for your next idea</h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#718077]">Save places and restaurants from a destination guide. You can organize them into separate lists as you plan.</p>
-      {onShowInGuide && <button type="button" onClick={onShowInGuide} className="mt-5 rounded-full bg-pine px-5 py-2.5 text-sm font-bold text-white transition hover:bg-pine/90">Browse saved places in this guide</button>}
+      {onShowInGuide && <button type="button" onClick={onShowInGuide} className="mt-5 rounded-full bg-btn-primary-bg px-5 py-2.5 text-sm font-bold text-btn-primary-text transition hover:bg-btn-primary-bg-hover">Browse saved places in this guide</button>}
     </div> : !matchingItems.length ? <p className="mt-6 rounded-xl bg-white p-8 text-center text-sm text-[#718077]">No saved places match “{searchTerm}”.</p> : groups.map(({ id, label, Icon, items }) => <section key={id} aria-label={label} className="mt-6 first:mt-5">
       {activeCategory === 'all' && <div className="mb-3 flex items-center gap-2"><Icon size={17} className="text-pine" /><h3 className="text-sm font-extrabold text-pine">{label}</h3><span className="text-xs font-semibold text-[#718077]">{items.length}</span></div>}
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
-          const { name: resolvedName, formattedAddress } = getItemDetails(item);
+          const { name: resolvedName, formattedAddress, description, rating, userRatingCount } = getItemDetails(item);
           const placeName = resolvedName || (item.name && item.name !== 'Saved place' ? item.name : item.displayName);
           const destinationName = item.destinationName || item.destinationSlug?.replace(/-/g, ' ');
           const categoryName = categories.find((category) => category.id === item.category)?.label || 'Place';
-          return <li key={`${item.provider}:${item.id}`} className="group flex min-w-0 overflow-hidden rounded-2xl border border-[#e0e7e1] bg-white shadow-sm transition hover:border-[#b9cbbd] hover:shadow-md">
-          <Link to={`/locations/${encodeURIComponent(item.destinationSlug)}`} className="flex min-w-0 flex-1 gap-3 p-3" onClick={onClose}>
-            {item.provider === 'google'
-              ? <CommonsPlaceImage placeId={item.id} category={item.category} destination={destinationName || ''} name={placeName || ''} alt={placeName || ''} className="h-20 w-24 shrink-0 sm:h-24 sm:w-28" fallback={<Icon size={24} />} />
-              : <span className="grid h-20 w-24 shrink-0 place-items-center rounded-xl bg-[#edf3ee] text-pine sm:h-24 sm:w-28"><Icon size={24} /></span>}
+          return <li key={`${item.provider}:${item.id}`} className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-[#e0e7e1] bg-white shadow-sm transition hover:border-[#b9cbbd] hover:shadow-md">
+          <Link to={`/locations/${encodeURIComponent(item.destinationSlug)}`} state={item.provider === 'google' ? { selectedPlaceId: item.id, selectedPlaceCategory: item.category } : undefined} className="flex min-w-0 gap-3 p-3" onClick={onClose}>
             <span className="min-w-0 self-center">
               <span className="block line-clamp-2 text-sm font-extrabold text-pine">{placeName || `Saved place in ${destinationName || 'your destination'}`}</span>
               <span className="mt-1 block text-[11px] font-semibold text-[#56645b]">{categoryName}</span>
-              {formattedAddress && <span className="mt-1 block line-clamp-2 text-xs text-[#718077]">{formattedAddress}</span>}
+              {rating > 0 && <span className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-[#738078]"><span aria-hidden="true" className="text-amber-500">★</span><span className="font-bold text-[#35443b]">{Number(rating).toFixed(1)}</span>{userRatingCount > 0 && <span>{Number(userRatingCount).toLocaleString()} reviews</span>}<GoogleGMark className="ml-0.5" title="Rating from Google Maps" /></span>}
+              {description && <span className="mt-1 block text-xs leading-4 text-[#59675e]">{description.length > 120 ? `${description.slice(0, 117).trimEnd()}…` : description}</span>}
               {destinationName && <span className="mt-1 block truncate text-xs capitalize text-[#718077]">{destinationName}</span>}
-              {item.provider === 'google' && <span translate="no" className="mt-1 block text-xs font-normal text-[#5e5e5e]">Google Maps</span>}
             </span>
+            {item.provider === 'google'
+              ? <CommonsPlaceImage placeId={item.id} category={item.category} destination={destinationName || ''} name={placeName || ''} alt={placeName || ''} className="ml-auto h-20 w-20 shrink-0 self-center sm:h-24 sm:w-28" fallback={<Icon size={24} />} />
+              : <span className="ml-auto grid h-20 w-20 shrink-0 self-center place-items-center rounded-xl bg-[#edf3ee] text-pine sm:h-24 sm:w-28"><Icon size={24} /></span>}
           </Link>
           <div className="flex shrink-0 flex-col items-center gap-1 p-2">
-            {item.provider === 'google' && <a href={`https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(item.id)}`} target="_blank" rel="noreferrer" aria-label="Open saved place in Google Maps" title="Open in Google Maps" className="grid h-9 w-9 place-items-center rounded-full text-pine hover:bg-[#edf4ef]"><MapPin size={16} /></a>}
+            {item.provider === 'google' && <a href={`https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(item.id)}`} target="_blank" rel="noreferrer" aria-label="Open saved place in Google Maps" title="Open in Google Maps" className="inline-flex h-9 items-center justify-center rounded-full px-2.5 hover:bg-[#edf4ef]"><GoogleMapsAttribution className="h-4" /></a>}
             <button type="button" onClick={() => removeItem(activeListId, item)} aria-label={`Remove saved place from ${activeList.name}`} title="Remove from wishlist" className="grid h-9 w-9 place-items-center rounded-full text-[#7a8980] opacity-100 transition hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"><Trash2 size={16} /></button>
           </div>
+          {formattedAddress && <div className="col-span-2 flex min-w-0 items-center gap-1.5 border-t border-[#edf1ed] px-3 py-2 text-[11px] leading-4 text-[#748078]"><MapPin size={12} className="shrink-0" /><span className="truncate">{formattedAddress}</span></div>}
         </li>;
         })}
       </ul>

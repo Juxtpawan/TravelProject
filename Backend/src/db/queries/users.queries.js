@@ -112,7 +112,7 @@ export async function updateUserProfile(userId, { name, email, username, avatarU
   }
   if (username !== undefined) {
     fields.push('username = ?');
-    params.push(username.trim());
+    params.push(username.trim().toLowerCase());
   }
   if (avatarUrl !== undefined) {
     fields.push('avatar_url = ?');

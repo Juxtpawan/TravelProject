@@ -5,11 +5,12 @@ export default function NumberedPin({ number, category, selected = false, small 
     <svg
       aria-hidden="true"
       viewBox="0 0 48 60"
-      className={`${small ? 'h-9 w-7' : 'h-14 w-11'} overflow-visible drop-shadow-md transition-transform ${selected ? 'scale-110' : 'hover:scale-105'}`}
+      className={`${small ? 'h-9 w-7' : 'h-14 w-11'} overflow-visible drop-shadow-md origin-bottom ${selected ? 'scale-110' : small ? '' : 'hover:scale-105'}`}
+      style={{ pointerEvents: 'auto' }}
     >
       <path d={pinPath} fill="white" />
-      <path d={pinPath} fill={category.border} transform="translate(2 2) scale(.917)" />
-      <path d={pinPath} fill={category.color} transform="translate(4 4) scale(.833)" />
+      <path d={pinPath} fill={category?.border || '#24549d'} transform="translate(2 2) scale(.917)" />
+      <path d={pinPath} fill={category?.color || '#3972c6'} transform="translate(4 4) scale(.833)" />
       <text x="24" y={small ? '26' : '29'} textAnchor="middle" dominantBaseline="central" fill="#000000" fontSize={small ? '19' : '24'} fontWeight="900" fontFamily="inherit">
         {number}
       </text>

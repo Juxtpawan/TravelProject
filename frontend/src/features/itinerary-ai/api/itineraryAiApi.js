@@ -85,8 +85,3 @@ export async function listPlannerConversations() {
   const { data } = await apiClient.get('/ai/conversations');
   return Array.isArray(data) ? data : [];
 }
-
-export async function getTripPlannerConversation(tripId) {
-  const { data } = await apiClient.get(`/ai/trips/${tripId}/conversation`);
-  return data;
-}
